@@ -1,0 +1,36 @@
+# Secrets — NEVER commit
+secrets/
+
+# MCP tooling (separate project, not part of Grove)
+mcp/
+
+# Node / Vite
+grove-ui/node_modules/
+grove-ui/dist/
+grove-ui/.vite/
+grove-ui/*.tsbuildinfo
+
+# Built UI glob (regenerated from grove-ui/)
+grove/app/grove/
+
+# Urbit pier artifacts
+.urb/
+.bin/
+.run
+.http.ports
+.vere.lock
+*.urbit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

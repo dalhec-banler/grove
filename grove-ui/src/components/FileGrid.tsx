@@ -1,0 +1,98 @@
+import type { FileMeta } from '../types';
+import { formatBytes, formatDate, fileIcon } from '../format';
+import { fileUrl, IMAGE_MARKS } from '../api';
+
+interface Props {
+  files: FileMeta[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onToggleStar: (id: string) => void;
+  onShare: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+export default function FileGrid(p: Props) {
+  if (p.files.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-faint text-sm">
+        No files here. Drop files to upload.
+      </div>
+    );
+  }
+  return (
+    <div className="flex-1 overflow-y-auto p-4">
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+        {p.files.map((f) => (
+          <Card
+            key={f.id}
+            file={f}
+            active={p.activeId === f.id}
+            onSelect={() => p.onSelect(f.id)}
+            onToggleStar={() => p.onToggleStar(f.id)}
+            onShare={() => p.onShare(f.id)}
+            onDelete={() => p.onDelete(f.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Card({ file, active, onSelect, onToggleStar, onShare, onDelete }: {
+  file: FileMeta; active: boolean; onSelect: () => void;
+  onToggleStar: () => void; onShare: () => void; onDelete: () => void;
+}) {
+  const isImage = IMAGE_MARKS.has(file.fileMark.toLowerCase());
+  return (
+    <div
+      onClick={onSelect}
+      className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${active ? 'border-accent ring-2 ring-accent-soft' : 'border-border hover:border-ink/20'}`}
+    >
+      <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
+        {isImage ? (
+          <img src={fileUrl(file.id)} alt={file.name} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-5xl">{fileIcon(file.fileMark)}</span>
+        )}
+      </div>
+      <div className="p-2">
+        <div className="text-sm truncate" title={file.name}>{file.name}</div>
+        <div className="text-xs text-muted flex justify-between">
+          <span>{formatBytes(file.size)}</span>
+          <span>{formatDate(file.modified)}</span>
+        </div>
+        {file.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {file.tags.slice(0, 2).map((t) => (
+              <span key={t} className="text-[10px] px-1 rounded bg-bg border border-border text-muted">{t}</span>
+            ))}
+            {file.tags.length > 2 && <span className="text-[10px] text-faint">+{file.tags.length - 2}</span>}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleStar(); }}
+        className={`absolute top-2 left-2 text-base ${file.starred ? 'text-amber-500' : 'text-white/80 hover:text-amber-500 drop-shadow'}`}
+      >
+        {file.starred ? '★' : '☆'}
+      </button>
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+        <a
+          href={fileUrl(file.id)}
+          download={file.name}
+          onClick={(e) => e.stopPropagation()}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-black/80"
+          title="Download"
+        >↓</a>
+        <button
+          onClick={(e) => { e.stopPropagation(); onShare(); }}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-black/80"
+        >Share</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600"
+        >×</button>
+      </div>
+    </div>
+  );
+}

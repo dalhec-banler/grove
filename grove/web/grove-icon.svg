@@ -1,0 +1,12 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="48" fill="#3A6BC5"/>
+  <g transform="translate(128, 124)">
+    <path d="M0-56 C-11-53 -20-40 -20-26 C-20-12 -9 0 0 0 C9 0 20-12 20-26 C20-40 11-53 0-56z" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-28-28 C-39-25 -48-12 -48 2 C-48 16 -37 28 -28 28 C-19 28 -8 16 -8 2 C-8-12 -17-25 -28-28z" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round" opacity="0.7"/>
+    <path d="M28-28 C17-25 8-12 8 2 C8 16 19 28 28 28 C37 28 48 16 48 2 C48-12 39-25 28-28z" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round" opacity="0.7"/>
+    <line x1="0" y1="0" x2="0" y2="68" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <line x1="-28" y1="28" x2="-28" y2="68" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+    <line x1="28" y1="28" x2="28" y2="68" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+    <line x1="-42" y1="68" x2="42" y2="68" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+  </g>
+</svg>

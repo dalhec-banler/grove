@@ -1,0 +1,11 @@
+:~
+  title+'Grove'
+  info+'Sovereign file storage for your ship'
+  color+0x3a.6bc5
+  image+'/apps/grove/grove-icon.svg'
+  version+[0 1 0]
+  website+'https://groundwire.dev'
+  license+'MIT'
+  base+'grove'
+  site+/apps/grove
+==
