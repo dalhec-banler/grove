@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip, addTag } from './format';
+import { formatBytes, formatDate, IMAGE_MARKS, inferMark, normalizeShip, addTag } from './format';
 
 describe('formatBytes', () => {
   it('formats bytes', () => {
@@ -31,6 +31,24 @@ describe('formatDate', () => {
     const result = formatDate('~2023.6.15..14.30.00..abcd');
     expect(result).toBeTruthy();
     expect(result).not.toBe('~2023.6.15..14.30.00..abcd');
+  });
+});
+
+describe('inferMark', () => {
+  it('returns extension as mark', () => {
+    expect(inferMark('photo.png')).toBe('png');
+    expect(inferMark('document.pdf')).toBe('pdf');
+    expect(inferMark('archive.tar.gz')).toBe('gz');
+  });
+
+  it('lowercases the extension', () => {
+    expect(inferMark('PHOTO.PNG')).toBe('png');
+    expect(inferMark('file.JPG')).toBe('jpg');
+  });
+
+  it('returns bin for files without extension', () => {
+    expect(inferMark('noext')).toBe('bin');
+    expect(inferMark('')).toBe('bin');
   });
 });
 
