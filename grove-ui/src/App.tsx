@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileMeta, View, Selection, CanopyMode, SortKey, ViewMode } from './types';
-import { poke, pokeSafe } from './api';
+import { poke, pokeSafe, setErrorHandler } from './api';
 import { parseViewMode } from './format';
 import { filterAndSortFiles } from './filter';
 import { useGroveData } from './useGroveData';
@@ -46,7 +46,11 @@ export default function App() {
   const [inboxSort, setInboxSort] = useState<SortKey>('newest');
   const [inboxViewMode, setInboxViewMode] = useState<ViewMode>('list');
   const [inboxSearch, setInboxSearch] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
 
+  useEffect(() => {
+    setErrorHandler((msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); });
+  }, []);
   useEffect(() => { localStorage.setItem('grove:viewMode', viewMode); }, [viewMode]);
 
   const tagCounts = useMemo(() => {
@@ -74,8 +78,7 @@ export default function App() {
       if (sh.fileId === fileId) { setShareDialog(sh); return; }
     }
     setPendingShareFor(fileId);
-    poke({ share: { id: fileId } }).catch((e) => {
-      console.error('share poke failed', e);
+    poke({ share: { id: fileId } }).catch(() => {
       setPendingShareFor(null);
     });
   }, [shares, setShareDialog, setPendingShareFor]);
@@ -338,6 +341,11 @@ export default function App() {
             upload.setBulkTagIds(null);
           }}
         />
+      )}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50">
+          {toast}
+        </div>
       )}
     </div>
   );

@@ -14,6 +14,12 @@ function parseCanopyMode(v: unknown): CanopyMode {
   return typeof v === 'string' && CANOPY_MODES.has(v as CanopyMode) ? (v as CanopyMode) : 'open';
 }
 
+// Error notification emitter — decouples API from browser UI (no alert())
+type ErrorHandler = (msg: string) => void;
+let _onError: ErrorHandler = (msg) => console.error('[grove]', msg);
+export function setErrorHandler(handler: ErrorHandler) { _onError = handler; }
+export function notifyError(msg: string) { _onError(msg); }
+
 let _api: Urbit | null = null;
 
 function getApi(): Urbit {
@@ -177,10 +183,10 @@ export function poke(action: GroveAction): Promise<void> {
   });
 }
 
-export function pokeSafe(action: GroveAction): void {
-  poke(action).catch((e) => {
+export function pokeSafe(action: GroveAction): Promise<void> {
+  return poke(action).catch((e) => {
     console.error('poke failed', action, e);
-    alert(`Action failed: ${(e as Error).message}`);
+    notifyError(`Action failed: ${(e as Error).message}`);
   });
 }
 

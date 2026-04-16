@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { FileMeta } from './types';
 import { inferMark } from './format';
-import { poke, fileToBase64, scryFiles } from './api';
+import { poke, fileToBase64, scryFiles, notifyError } from './api';
 
 export function waitForUploadEvents(
   expected: number,
@@ -56,7 +56,7 @@ export function useUpload(
       setFiles(new Map(fresh.map((m) => [m.id, m])));
     } catch (e) {
       console.error('upload failed', e);
-      alert(`Upload failed: ${(e as Error).message ?? e}`);
+      notifyError(`Upload failed: ${(e as Error).message ?? e}`);
     } finally {
       isUploadingRef.current = false;
       uploadCollectedRef.current = [];

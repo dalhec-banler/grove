@@ -34,6 +34,7 @@ export function useGroveData(
   const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
   const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
   const [connected, setConnected] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingShareFor, setPendingShareFor] = useState<string | null>(null);
   const [shareDialog, setShareDialog] = useState<Share | null>(null);
   const filesRef = useRef(files);
@@ -55,6 +56,7 @@ export function useGroveData(
     setCanopyPeers(new Map(peerList.map((l) => [l.host, l])));
     setAvailableGroups(groupList);
     setConnected(true);
+    setLoadError(null);
   }, []);
 
   const handleUpdate = useCallback((u: Update) => {
@@ -161,12 +163,12 @@ export function useGroveData(
   }, [isUploadingRef, uploadCollectedRef]);
 
   useEffect(() => {
-    refreshAll().catch((e) => console.error('initial load failed', e));
+    refreshAll().catch((e) => { console.error('initial load failed', e); setLoadError('Failed to connect to Grove'); });
   }, [refreshAll]);
 
   useEffect(() => {
     const handle = subscribeUpdates(handleUpdate, {
-      onQuit: () => refreshAll().catch((e) => console.error('reconnect refresh failed', e)),
+      onQuit: () => refreshAll().catch((e) => { console.error('reconnect refresh failed', e); setLoadError('Connection lost'); }),
       onError: () => setConnected(false),
     });
     return () => handle.cancel();
@@ -175,6 +177,6 @@ export function useGroveData(
   return {
     files, setFiles, views, shares, inbox, trusted, blocked,
     canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, availableGroups,
-    connected, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
+    connected, loadError, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
   };
 }
