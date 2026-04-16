@@ -170,6 +170,13 @@ export function poke(action: Record<string, unknown>): Promise<void> {
   });
 }
 
+export function pokeSafe(action: Record<string, unknown>): void {
+  poke(action).catch((e) => {
+    console.error('poke failed', action, e);
+    alert(`Action failed: ${(e as Error).message}`);
+  });
+}
+
 export function subscribeUpdates(
   onEvent: (u: Update) => void,
   onQuit?: () => void,

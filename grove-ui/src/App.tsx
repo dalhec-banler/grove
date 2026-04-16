@@ -6,7 +6,7 @@ import type {
 import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
   scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
-  poke, subscribeUpdates, fileToBase64, inferMark,
+  poke, pokeSafe, subscribeUpdates, fileToBase64, inferMark,
 } from './api';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
@@ -342,7 +342,7 @@ export default function App() {
         onSelect={setSelection}
         onNewView={() => { setEditingView(null); setShowViewModal(true); }}
         onEditView={(v) => { setEditingView(v); setShowViewModal(true); }}
-        onDeleteView={(v) => poke({ rmview: { name: v.name } })}
+        onDeleteView={(v) => pokeSafe({ rmview: { name: v.name } })}
         counts={{
           all: files.size,
           starred: Array.from(files.values()).filter((f) => f.starred).length,
@@ -354,7 +354,7 @@ export default function App() {
         shipName={window.ship ?? ''}
         canopyPeers={canopyPeerList}
         onUnsubscribeCanopy={(ship) => {
-          poke({ 'unsubscribe-from': { who: ship } });
+          pokeSafe({ 'unsubscribe-from': { who: ship } });
           if (selection.kind === 'canopy-peer' && selection.ship === ship) {
             setSelection({ kind: 'canopy-browse' });
           }
@@ -436,15 +436,15 @@ export default function App() {
               search={inboxSearch}
               sortKey={inboxSort}
               viewMode={inboxViewMode}
-              onAccept={(e) => poke({ 'accept-offer': { owner: e.owner, id: e.fileId } })}
-              onDecline={(e) => poke({ 'decline-offer': { owner: e.owner, id: e.fileId } })}
-              onTrust={(s) => poke({ 'trust-ship': { who: s } })}
-              onUntrust={(s) => poke({ 'untrust-ship': { who: s } })}
-              onBlock={(s) => poke({ 'block-ship': { who: s } })}
-              onUnblock={(s) => poke({ 'unblock-ship': { who: s } })}
-              onFetch={(e) => poke({ fetch: { owner: e.owner, id: e.fileId } })}
-              onPlant={(e) => poke({ plant: { owner: e.owner, id: e.fileId } })}
-              onDropCache={(e) => poke({ 'drop-cache': { owner: e.owner, id: e.fileId } })}
+              onAccept={(e) => pokeSafe({ 'accept-offer': { owner: e.owner, id: e.fileId } })}
+              onDecline={(e) => pokeSafe({ 'decline-offer': { owner: e.owner, id: e.fileId } })}
+              onTrust={(s) => pokeSafe({ 'trust-ship': { who: s } })}
+              onUntrust={(s) => pokeSafe({ 'untrust-ship': { who: s } })}
+              onBlock={(s) => pokeSafe({ 'block-ship': { who: s } })}
+              onUnblock={(s) => pokeSafe({ 'unblock-ship': { who: s } })}
+              onFetch={(e) => pokeSafe({ fetch: { owner: e.owner, id: e.fileId } })}
+              onPlant={(e) => pokeSafe({ plant: { owner: e.owner, id: e.fileId } })}
+              onDropCache={(e) => pokeSafe({ 'drop-cache': { owner: e.owner, id: e.fileId } })}
             />
           ) : selection.kind === 'canopy-mine' ? (
             <CanopyView
@@ -454,12 +454,12 @@ export default function App() {
               search={canopySearch}
               sortKey={canopySort}
               viewMode={canopyViewMode}
-              onUnpublish={(id) => poke({ unpublish: { id } })}
-              onSetMode={(m: CanopyMode) => { setCanopyConfig((c) => ({ ...c, mode: m })); poke({ 'set-canopy-mode': { mode: m } }); }}
-              onSetName={(name) => poke({ 'set-canopy-name': { name } })}
-              onAddFriend={(who) => poke({ 'add-friend': { who } })}
-              onRemoveFriend={(who) => poke({ 'remove-friend': { who } })}
-              onSetGroup={(flag) => poke({ 'set-canopy-group': { flag: flag ?? null } })}
+              onUnpublish={(id) => pokeSafe({ unpublish: { id } })}
+              onSetMode={(m: CanopyMode) => { setCanopyConfig((c) => ({ ...c, mode: m })); pokeSafe({ 'set-canopy-mode': { mode: m } }); }}
+              onSetName={(name) => pokeSafe({ 'set-canopy-name': { name } })}
+              onAddFriend={(who) => pokeSafe({ 'add-friend': { who } })}
+              onRemoveFriend={(who) => pokeSafe({ 'remove-friend': { who } })}
+              onSetGroup={(flag) => pokeSafe({ 'set-canopy-group': { flag: flag ?? null } })}
               groups={availableGroups}
             />
           ) : selection.kind === 'canopy-browse' ? (
@@ -467,7 +467,7 @@ export default function App() {
               kind="browse"
               subscribed={new Set(canopyPeers.keys())}
               onSubscribe={(ship) => {
-                poke({ 'subscribe-to': { who: ship } });
+                pokeSafe({ 'subscribe-to': { who: ship } });
                 setSelection({ kind: 'canopy-peer', ship });
               }}
             />
@@ -480,11 +480,11 @@ export default function App() {
               search={canopySearch}
               sortKey={canopySort}
               viewMode={canopyViewMode}
-              onFetch={(host, id) => poke({ fetch: { owner: host, id } })}
-              onPlant={(host, id) => poke({ plant: { owner: host, id } })}
-              onDropCache={(host, id) => poke({ 'drop-cache': { owner: host, id } })}
+              onFetch={(host, id) => pokeSafe({ fetch: { owner: host, id } })}
+              onPlant={(host, id) => pokeSafe({ plant: { owner: host, id } })}
+              onDropCache={(host, id) => pokeSafe({ 'drop-cache': { owner: host, id } })}
               onUnsubscribe={(ship) => {
-                poke({ 'unsubscribe-from': { who: ship } });
+                pokeSafe({ 'unsubscribe-from': { who: ship } });
                 setSelection({ kind: 'canopy-browse' });
               }}
             />
@@ -493,11 +493,11 @@ export default function App() {
               files={visibleFiles}
               activeId={activeFileId}
               onSelect={setActiveFileId}
-              onToggleStar={(id) => poke({ 'toggle-star': { id } })}
+              onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
               onShare={openShareFor}
               onDelete={(id) => {
                 if (!confirm('Delete this file?')) return;
-                poke({ delete: { id } });
+                pokeSafe({ delete: { id } });
                 if (activeFileId === id) setActiveFileId(null);
               }}
             />
@@ -506,11 +506,11 @@ export default function App() {
               files={visibleFiles}
               activeId={activeFileId}
               onSelect={setActiveFileId}
-              onToggleStar={(id) => poke({ 'toggle-star': { id } })}
+              onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
               onShare={openShareFor}
               onDelete={(id) => {
                 if (!confirm('Delete this file?')) return;
-                poke({ delete: { id } });
+                pokeSafe({ delete: { id } });
                 if (activeFileId === id) setActiveFileId(null);
               }}
             />
@@ -521,17 +521,17 @@ export default function App() {
               share={shareForActive}
               published={canopyEntries.has(activeFile.id)}
               onClose={() => setActiveFileId(null)}
-              onRename={(name) => poke({ rename: { id: activeFile.id, name } })}
-              onAddTags={(tags) => poke({ 'add-tags': { id: activeFile.id, tags } })}
-              onRemoveTags={(tags) => poke({ 'remove-tags': { id: activeFile.id, tags } })}
+              onRename={(name) => pokeSafe({ rename: { id: activeFile.id, name } })}
+              onAddTags={(tags) => pokeSafe({ 'add-tags': { id: activeFile.id, tags } })}
+              onRemoveTags={(tags) => pokeSafe({ 'remove-tags': { id: activeFile.id, tags } })}
               onShare={() => openShareFor(activeFile.id)}
-              onUnshare={(token) => poke({ unshare: { token } })}
+              onUnshare={(token) => pokeSafe({ unshare: { token } })}
               onShowShare={(sh) => setShareDialog(sh)}
               onSetAllowed={(ships, notify) =>
-                poke({ 'set-allowed': { id: activeFile.id, ships, notify } })
+                pokeSafe({ 'set-allowed': { id: activeFile.id, ships, notify } })
               }
               onPublish={() => setPublishingFile(activeFile)}
-              onUnpublish={() => poke({ unpublish: { id: activeFile.id } })}
+              onUnpublish={() => pokeSafe({ unpublish: { id: activeFile.id } })}
             />
           )}
         </div>
@@ -551,7 +551,7 @@ export default function App() {
           allTags={uniqueTags(files)}
           onClose={() => setShowViewModal(false)}
           onSave={(name, tags, color) => {
-            poke({ mkview: { name, tags, color } });
+            pokeSafe({ mkview: { name, tags, color } });
             setShowViewModal(false);
           }}
         />
@@ -564,7 +564,7 @@ export default function App() {
           file={publishingFile}
           onClose={() => setPublishingFile(null)}
           onPublish={({ displayName, tags, description }) => {
-            poke({
+            pokeSafe({
               publish: {
                 id: publishingFile.id,
                 'display-name': displayName,
@@ -583,8 +583,8 @@ export default function App() {
           onClose={() => setBulkTagIds(null)}
           onApply={({ tags, makePublic }) => {
             for (const id of bulkTagIds) {
-              if (tags.length > 0) poke({ 'add-tags': { id, tags } });
-              if (makePublic) poke({ share: { id } });
+              if (tags.length > 0) pokeSafe({ 'add-tags': { id, tags } });
+              if (makePublic) pokeSafe({ share: { id } });
             }
             setBulkTagIds(null);
           }}
