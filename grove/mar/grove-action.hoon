@@ -51,9 +51,18 @@
           add-friend+(ot ~[who+parse-ship])
           remove-friend+(ot ~[who+parse-ship])
           set-canopy-name+(ot ~[name+so])
+          set-canopy-group+(ot ~[flag+parse-group-flag])
           subscribe-to+(ot ~[who+parse-ship])
           unsubscribe-from+(ot ~[who+parse-ship])
       ==
+    ++  parse-group-flag
+      |=  jon=json
+      ^-  (unit [ship term])
+      ?~  jon  ~
+      ?:  ?=([%~ ~] jon)  ~
+      %-  some
+      %.  jon
+      (ot ~[host+parse-ship name+parse-tag])
     ++  parse-canopy-mode
       %+  cu
         |=  t=@t
@@ -61,6 +70,7 @@
         ?+  t  !!
           %open     %open
           %friends  %friends
+          %group    %group
         ==
       so
     --

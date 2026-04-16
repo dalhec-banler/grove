@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import type { InboxEntry } from '../types';
-import { formatBytes, formatDate, fileIcon } from '../format';
+import { formatBytes, formatDate } from '../format';
+import FileIcon from './FileIcon';
 import { remoteFileUrl, IMAGE_MARKS } from '../api';
+import Thumb from './Thumb';
 
 interface Props {
   entries: InboxEntry[];
   trusted: Set<string>;
   blocked: Set<string>;
+  search: string;
+  sortKey: string;
+  viewMode: 'list' | 'grid';
   onAccept: (e: InboxEntry) => void;
   onDecline: (e: InboxEntry) => void;
   onTrust: (ship: string) => void;
@@ -18,34 +23,84 @@ interface Props {
   onDropCache: (e: InboxEntry) => void;
 }
 
+type InboxSort = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
+
+function sortInbox(entries: InboxEntry[], key: InboxSort): InboxEntry[] {
+  const list = entries.slice();
+  switch (key) {
+    case 'newest':    return list.sort((a, b) => b.offered.localeCompare(a.offered));
+    case 'oldest':    return list.sort((a, b) => a.offered.localeCompare(b.offered));
+    case 'name-asc':  return list.sort((a, b) => a.name.localeCompare(b.name));
+    case 'name-desc': return list.sort((a, b) => b.name.localeCompare(a.name));
+    case 'largest':   return list.sort((a, b) => b.size - a.size);
+    case 'smallest':  return list.sort((a, b) => a.size - b.size);
+    case 'type':      return list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name));
+  }
+}
+
+function filterInbox(entries: InboxEntry[], search: string): InboxEntry[] {
+  const q = search.trim().toLowerCase();
+  if (!q) return entries;
+  return entries.filter((e) => {
+    const hay = `${e.name} ${e.owner} ${e.fileMark}`.toLowerCase();
+    return hay.includes(q);
+  });
+}
+
 export default function InboxView(p: Props) {
-  const pending = p.entries.filter((e) => !e.accepted);
-  const accepted = p.entries.filter((e) => e.accepted);
+  const sk = p.sortKey as InboxSort;
+  const pending = sortInbox(filterInbox(p.entries.filter((e) => !e.accepted), p.search), sk);
+  const accepted = sortInbox(filterInbox(p.entries.filter((e) => e.accepted), p.search), sk);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-8">
       {pending.length > 0 && (
         <Section title={`Pending offers (${pending.length})`}>
-          <div className="space-y-2">
-            {pending.map((e) => (
-              <PendingRow
-                key={`${e.owner}/${e.fileId}`}
-                entry={e}
-                trusted={p.trusted.has(e.owner)}
-                blocked={p.blocked.has(e.owner)}
-                onAccept={() => p.onAccept(e)}
-                onDecline={() => p.onDecline(e)}
-                onTrust={() => p.onTrust(e.owner)}
-                onBlock={() => p.onBlock(e.owner)}
-              />
-            ))}
-          </div>
+          {p.viewMode === 'grid' ? (
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+              {pending.map((e) => (
+                <PendingCard
+                  key={`${e.owner}/${e.fileId}`}
+                  entry={e}
+                  onAccept={() => p.onAccept(e)}
+                  onDecline={() => p.onDecline(e)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pending.map((e) => (
+                <PendingRow
+                  key={`${e.owner}/${e.fileId}`}
+                  entry={e}
+                  trusted={p.trusted.has(e.owner)}
+                  blocked={p.blocked.has(e.owner)}
+                  onAccept={() => p.onAccept(e)}
+                  onDecline={() => p.onDecline(e)}
+                  onTrust={() => p.onTrust(e.owner)}
+                  onBlock={() => p.onBlock(e.owner)}
+                />
+              ))}
+            </div>
+          )}
         </Section>
       )}
 
       <Section title={`Shared with me (${accepted.length})`}>
         {accepted.length === 0 ? (
           <div className="text-sm text-faint">Nothing shared with you yet.</div>
+        ) : p.viewMode === 'grid' ? (
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+            {accepted.map((e) => (
+              <AcceptedCard
+                key={`${e.owner}/${e.fileId}`}
+                entry={e}
+                onFetch={() => p.onFetch(e)}
+                onPlant={() => p.onPlant(e)}
+                onDecline={() => p.onDecline(e)}
+              />
+            ))}
+          </div>
         ) : (
           <div className="space-y-2">
             {accepted.map((e) => (
@@ -91,7 +146,7 @@ function PendingRow({ entry, trusted, blocked, onAccept, onDecline, onTrust, onB
 }) {
   return (
     <div className="border border-border rounded-lg p-3 bg-surface flex items-center gap-3">
-      <span className="text-2xl">{fileIcon(entry.fileMark)}</span>
+      <Thumb mark={entry.fileMark} size="md" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{entry.name}</div>
         <div className="text-xs text-muted font-mono truncate">{entry.owner}</div>
@@ -133,7 +188,7 @@ function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }: {
   return (
     <div className="border border-border rounded-lg p-3 bg-surface">
       <div className="flex items-center gap-3">
-        <span className="text-2xl">{fileIcon(entry.fileMark)}</span>
+        <Thumb mark={entry.fileMark} src={entry.cached ? remoteFileUrl(entry.owner, entry.fileId) : undefined} size="md" />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{entry.name}</div>
           <div className="text-xs text-muted font-mono truncate">{entry.owner}</div>
@@ -177,6 +232,85 @@ function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }: {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function PendingCard({ entry, onAccept, onDecline }: {
+  entry: InboxEntry; onAccept: () => void; onDecline: () => void;
+}) {
+  return (
+    <div className="group relative rounded-lg border border-border bg-surface overflow-hidden">
+      <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
+        {IMAGE_MARKS.has(entry.fileMark.toLowerCase()) ? (
+          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
+        ) : (
+          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
+        )}
+      </div>
+      <div className="p-2">
+        <div className="text-sm truncate" title={entry.name}>{entry.name}</div>
+        <div className="text-xs text-muted font-mono truncate">{entry.owner}</div>
+        <div className="text-xs text-faint">{formatBytes(entry.size)}</div>
+      </div>
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+        <button
+          onClick={onAccept}
+          className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90"
+        >Accept</button>
+        <button
+          onClick={onDecline}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600"
+        >×</button>
+      </div>
+    </div>
+  );
+}
+
+function AcceptedCard({ entry, onFetch, onPlant, onDecline }: {
+  entry: InboxEntry; onFetch: () => void; onPlant: () => void; onDecline: () => void;
+}) {
+  const isImage = IMAGE_MARKS.has(entry.fileMark.toLowerCase());
+
+  return (
+    <div className="group relative rounded-lg border border-border bg-surface overflow-hidden cursor-pointer" onClick={() => { if (!entry.cached) onFetch(); }}>
+      <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
+        {isImage && entry.cached ? (
+          <img src={remoteFileUrl(entry.owner, entry.fileId)} alt={entry.name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
+        )}
+      </div>
+      <div className="p-2">
+        <div className="text-sm truncate" title={entry.name}>{entry.name}</div>
+        <div className="text-xs text-muted font-mono truncate">{entry.owner}</div>
+        <div className="text-xs text-faint">
+          {formatBytes(entry.size)} · {entry.cached ? 'cached' : 'live ref'}
+        </div>
+      </div>
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+        {entry.cached && (
+          <a
+            href={remoteFileUrl(entry.owner, entry.fileId)}
+            download={entry.name}
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-black/80"
+            title="Download"
+          >↓</a>
+        )}
+        {entry.cached && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPlant(); }}
+            className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-accent"
+            title="Plant to grove"
+          >Plant</button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDecline(); }}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600"
+          title="Remove"
+        >×</button>
+      </div>
     </div>
   );
 }

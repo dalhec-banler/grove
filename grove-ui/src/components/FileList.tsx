@@ -1,6 +1,7 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate, fileIcon } from '../format';
-import { fileUrl, IMAGE_MARKS } from '../api';
+import { formatBytes, formatDate } from '../format';
+import { fileUrl } from '../api';
+import Thumb from './Thumb';
 
 interface Props {
   files: FileMeta[];
@@ -50,11 +51,7 @@ export default function FileList(p: Props) {
               </td>
               <td className="px-3 py-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  {IMAGE_MARKS.has(f.fileMark.toLowerCase()) ? (
-                    <img src={fileUrl(f.id)} alt="" className="w-6 h-6 object-cover rounded border border-border" />
-                  ) : (
-                    <span className="text-lg">{fileIcon(f.fileMark)}</span>
-                  )}
+                  <Thumb mark={f.fileMark} src={fileUrl(f.id)} size="sm" />
                   <span className="truncate">{f.name}</span>
                 </div>
               </td>

@@ -37,10 +37,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         navigateFallback: '/apps/grove/index.html',
         navigateFallbackDenylist: [/^\/~/, /^\/grove-file\//, /^\/grove-remote-file\//, /^\/grove-share\//],
-        // Never cache Urbit API or file bytes — these must always be live and auth'd.
         runtimeCaching: [],
-        // Don't intercept URLs outside our app scope.
         navigationPreload: false,
+        skipWaiting: true,
+        clientsClaim: true,
       },
       devOptions: {
         enabled: false,

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   FileMeta, View, Share, Selection, Update, InboxEntry,
-  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode,
+  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
 } from './types';
 import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
-  scryCanopyEntries, scryCanopyConfig, scryCanopyPeers,
+  scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
   poke, subscribeUpdates, fileToBase64, inferMark,
 } from './api';
 import Sidebar from './components/Sidebar';
@@ -21,6 +21,7 @@ import CanopyView from './components/CanopyView';
 import PublishModal from './components/PublishModal';
 
 type ViewMode = 'list' | 'grid';
+type FileSort = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
 export default function App() {
   const [files, setFiles] = useState<Map<string, FileMeta>>(new Map());
@@ -30,7 +31,8 @@ export default function App() {
   const [trusted, setTrusted] = useState<Set<string>>(new Set());
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
   const [canopyEntries, setCanopyEntries] = useState<Map<string, CanopyEntry>>(new Map());
-  const [canopyConfig, setCanopyConfig] = useState<CanopyConfig>({ mode: 'open', name: '', friends: [] });
+  const [canopyConfig, setCanopyConfig] = useState<CanopyConfig>({ mode: 'open', name: '', friends: [], groupFlag: null });
+  const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
   const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
   const [selection, setSelection] = useState<Selection>({ kind: 'all' });
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -44,6 +46,13 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('grove:viewMode') as ViewMode) || 'grid'
   );
+  const [fileSort, setFileSort] = useState<FileSort>('newest');
+  const [canopySort, setCanopySort] = useState<FileSort>('newest');
+  const [canopyViewMode, setCanopyViewMode] = useState<ViewMode>('list');
+  const [canopySearch, setCanopySearch] = useState('');
+  const [inboxSort, setInboxSort] = useState<FileSort>('newest');
+  const [inboxViewMode, setInboxViewMode] = useState<ViewMode>('list');
+  const [inboxSearch, setInboxSearch] = useState('');
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkTagIds, setBulkTagIds] = useState<string[] | null>(null);
@@ -56,9 +65,9 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const [f, v, s, ib, tr, ce, cc, cp] = await Promise.all([
+      const [f, v, s, ib, tr, ce, cc, cp, gr] = await Promise.all([
         scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
-        scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(),
+        scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
       ]);
       setFiles(new Map(f.map((m) => [m.id, m])));
       setViews(new Map(v.map((w) => [w.name, w])));
@@ -69,6 +78,7 @@ export default function App() {
       setCanopyEntries(new Map(ce.map((e) => [e.id, e])));
       setCanopyConfig(cc);
       setCanopyPeers(new Map(cp.map((l) => [l.host, l])));
+      setAvailableGroups(gr);
       setConnected(true);
     })().catch((e) => console.error('initial load failed', e));
   }, []);
@@ -221,7 +231,7 @@ export default function App() {
   }, [files]);
 
   const visibleFiles = useMemo(() => {
-    let list = Array.from(files.values()).sort((a, b) => b.modified.localeCompare(a.modified));
+    let list = Array.from(files.values());
     if (selection.kind === 'starred') list = list.filter((f) => f.starred);
     else if (selection.kind === 'view') {
       const view = views.get(selection.name);
@@ -237,8 +247,17 @@ export default function App() {
         f.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
+    switch (fileSort) {
+      case 'newest':   list.sort((a, b) => b.modified.localeCompare(a.modified)); break;
+      case 'oldest':   list.sort((a, b) => a.modified.localeCompare(b.modified)); break;
+      case 'name-asc': list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'name-desc':list.sort((a, b) => b.name.localeCompare(a.name)); break;
+      case 'largest':  list.sort((a, b) => b.size - a.size); break;
+      case 'smallest': list.sort((a, b) => a.size - b.size); break;
+      case 'type':     list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name)); break;
+    }
     return list;
-  }, [files, views, selection, search]);
+  }, [files, views, selection, search, fileSort]);
 
   const activeFile = activeFileId ? files.get(activeFileId) ?? null : null;
   const shareForActive = useMemo(() => {
@@ -351,27 +370,56 @@ export default function App() {
               </span>
             ) : activeTitle}
           </h1>
-          {!isCanopySelection && selection.kind !== 'inbox' && (
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files & tags…"
-              className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
-            />
-          )}
-          <div className="ml-auto flex items-center gap-3">
-            {!isCanopySelection && selection.kind !== 'inbox' && (
-              <div className="flex border border-border rounded overflow-hidden text-xs">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-2 py-1 ${viewMode === 'list' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-bg'}`}
-                >List</button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`px-2 py-1 border-l border-border ${viewMode === 'grid' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-bg'}`}
-                >Grid</button>
-              </div>
-            )}
+          {selection.kind !== 'canopy-browse' && (() => {
+            const isCanopy = selection.kind === 'canopy-mine' || selection.kind === 'canopy-peer';
+            const isInbox = selection.kind === 'inbox';
+            const curSearch = isCanopy ? canopySearch : isInbox ? inboxSearch : search;
+            const setCurSearch = isCanopy ? setCanopySearch : isInbox ? setInboxSearch : setSearch;
+            const curSort = isCanopy ? canopySort : isInbox ? inboxSort : fileSort;
+            const setCurSort = isCanopy ? setCanopySort : isInbox ? setInboxSort : setFileSort;
+            const curVM = isCanopy ? canopyViewMode : isInbox ? inboxViewMode : viewMode;
+            const setCurVM = isCanopy ? setCanopyViewMode : isInbox ? setInboxViewMode : setViewMode;
+            const tint = isCanopy ? 'canopy' : 'accent';
+            const activeBg = isCanopy ? 'bg-canopy-soft' : 'bg-accent-soft';
+            const activeText = isCanopy ? 'text-canopy' : 'text-accent';
+            return (
+              <>
+                <input
+                  value={curSearch}
+                  onChange={(e) => setCurSearch(e.target.value)}
+                  placeholder={isCanopy ? 'Search entries…' : isInbox ? 'Search shared…' : 'Search files & tags…'}
+                  className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
+                />
+                <div className="ml-auto flex items-center gap-3">
+                  <select
+                    value={curSort}
+                    onChange={(e) => setCurSort(e.target.value as FileSort)}
+                    className="text-xs border border-border rounded px-2 py-1 bg-surface"
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="name-asc">Name A→Z</option>
+                    <option value="name-desc">Name Z→A</option>
+                    <option value="largest">Largest first</option>
+                    <option value="smallest">Smallest first</option>
+                    <option value="type">Type</option>
+                  </select>
+                  <div className="flex border border-border rounded overflow-hidden text-xs">
+                    <button
+                      onClick={() => setCurVM('list')}
+                      className={`px-2 py-1 ${curVM === 'list' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
+                    >List</button>
+                    <button
+                      onClick={() => setCurVM('grid')}
+                      className={`px-2 py-1 border-l border-border ${curVM === 'grid' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
+                    >Grid</button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+          {selection.kind === 'canopy-browse' && <div className="flex-1" />}
+          <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
             <UploadZone busy={uploadBusy} progress={uploadProgress} onFiles={uploadFiles} />
           </div>
         </header>
@@ -381,6 +429,9 @@ export default function App() {
               entries={Array.from(inbox.values())}
               trusted={trusted}
               blocked={blocked}
+              search={inboxSearch}
+              sortKey={inboxSort}
+              viewMode={inboxViewMode}
               onAccept={(e) => poke({ 'accept-offer': { owner: e.owner, id: e.fileId } })}
               onDecline={(e) => poke({ 'decline-offer': { owner: e.owner, id: e.fileId } })}
               onTrust={(s) => poke({ 'trust-ship': { who: s } })}
@@ -396,11 +447,16 @@ export default function App() {
               kind="mine"
               entries={Array.from(canopyEntries.values())}
               config={canopyConfig}
+              search={canopySearch}
+              sortKey={canopySort}
+              viewMode={canopyViewMode}
               onUnpublish={(id) => poke({ unpublish: { id } })}
-              onSetMode={(m: CanopyMode) => poke({ 'set-canopy-mode': { mode: m } })}
+              onSetMode={(m: CanopyMode) => { setCanopyConfig((c) => ({ ...c, mode: m })); poke({ 'set-canopy-mode': { mode: m } }); }}
               onSetName={(name) => poke({ 'set-canopy-name': { name } })}
               onAddFriend={(who) => poke({ 'add-friend': { who } })}
               onRemoveFriend={(who) => poke({ 'remove-friend': { who } })}
+              onSetGroup={(flag) => poke({ 'set-canopy-group': { flag: flag ?? null } })}
+              groups={availableGroups}
             />
           ) : selection.kind === 'canopy-browse' ? (
             <CanopyView
@@ -417,6 +473,9 @@ export default function App() {
               host={selection.ship}
               listing={canopyPeers.get(selection.ship) ?? null}
               cache={inbox}
+              search={canopySearch}
+              sortKey={canopySort}
+              viewMode={canopyViewMode}
               onFetch={(host, id) => poke({ fetch: { owner: host, id } })}
               onPlant={(host, id) => poke({ plant: { owner: host, id } })}
               onDropCache={(host, id) => poke({ 'drop-cache': { owner: host, id } })}

@@ -1,7 +1,7 @@
 import Urbit from '@urbit/http-api';
 import type {
   FileMeta, View, Share, Update, InboxEntry, Trust,
-  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode,
+  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
 } from './types';
 
 declare global {
@@ -86,6 +86,9 @@ function canopyConfigFromJson(o: any): CanopyConfig {
     mode: (o.mode as CanopyMode) ?? 'open',
     name: o.name ?? '',
     friends: o.friends ?? [],
+    groupFlag: o['group-flag'] && o['group-flag'].host
+      ? { host: o['group-flag'].host, name: o['group-flag'].name }
+      : null,
   };
 }
 
@@ -134,6 +137,20 @@ export async function scryCanopySearch(term: string): Promise<CanopySearchHit[]>
   if (!t) return [];
   const raw = await api.scry<any[]>({ app: 'grove', path: `/canopy/search/${encodeURIComponent(t)}` });
   return (raw ?? []).map((h: any) => ({ host: h.host, entry: canopyEntryFromJson(h.entry) }));
+}
+
+export async function scryGroups(): Promise<GroupInfo[]> {
+  try {
+    const raw = await api.scry<any[]>({ app: 'grove', path: '/canopy/groups' });
+    return (raw ?? []).map((g: any) => ({
+      host: g.host,
+      name: g.name,
+      title: g.title ?? '',
+      members: g.members ?? 0,
+    }));
+  } catch (_e) {
+    return [];
+  }
 }
 
 export function remoteFileUrl(owner: string, id: string): string {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FileMeta, Share } from '../types';
-import { formatBytes, formatDate, fileIcon } from '../format';
+import { formatBytes, formatDate } from '../format';
+import Thumb from './Thumb';
 import { fileUrl } from '../api';
 
 interface Props {
@@ -62,7 +63,7 @@ export default function FileDetails(p: Props) {
       </div>
 
       <div className="p-4 border-b border-border flex items-center gap-3">
-        <div className="text-3xl">{fileIcon(p.file.fileMark)}</div>
+        <Thumb mark={p.file.fileMark} src={fileUrl(p.file.id)} size="lg" />
         <div className="min-w-0 flex-1">
           {renaming ? (
             <div className="flex gap-1">

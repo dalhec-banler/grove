@@ -42,7 +42,7 @@ export interface Trust {
   blocked: string[];
 }
 
-export type CanopyMode = 'open' | 'friends';
+export type CanopyMode = 'open' | 'friends' | 'group';
 
 export interface CanopyEntry {
   id: FileId;
@@ -54,10 +54,23 @@ export interface CanopyEntry {
   description: string;
 }
 
+export interface GroupFlag {
+  host: string;
+  name: string;
+}
+
+export interface GroupInfo {
+  host: string;
+  name: string;
+  title: string;
+  members: number;
+}
+
 export interface CanopyConfig {
   mode: CanopyMode;
   name: string;
   friends: string[];
+  groupFlag: GroupFlag | null;
 }
 
 export interface CanopyListing {

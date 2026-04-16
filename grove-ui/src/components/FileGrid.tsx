@@ -1,5 +1,6 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate, fileIcon } from '../format';
+import { formatBytes, formatDate } from '../format';
+import FileIcon from './FileIcon';
 import { fileUrl, IMAGE_MARKS } from '../api';
 
 interface Props {
@@ -42,17 +43,16 @@ function Card({ file, active, onSelect, onToggleStar, onShare, onDelete }: {
   file: FileMeta; active: boolean; onSelect: () => void;
   onToggleStar: () => void; onShare: () => void; onDelete: () => void;
 }) {
-  const isImage = IMAGE_MARKS.has(file.fileMark.toLowerCase());
   return (
     <div
       onClick={onSelect}
       className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${active ? 'border-accent ring-2 ring-accent-soft' : 'border-border hover:border-ink/20'}`}
     >
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {isImage ? (
-          <img src={fileUrl(file.id)} alt={file.name} className="w-full h-full object-cover" />
+        {IMAGE_MARKS.has(file.fileMark.toLowerCase()) ? (
+          <img src={fileUrl(file.id)} alt={file.name} className="w-full h-full object-cover" loading="lazy" />
         ) : (
-          <span className="text-5xl">{fileIcon(file.fileMark)}</span>
+          <FileIcon mark={file.fileMark} className="w-16 h-16" />
         )}
       </div>
       <div className="p-2">

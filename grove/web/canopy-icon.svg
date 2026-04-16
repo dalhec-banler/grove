@@ -1,0 +1,22 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="48" fill="#2E7D4F"/>
+  <g transform="translate(128, 128)">
+    <!-- Single trunk -->
+    <line x1="0" y1="8" x2="0" y2="60" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <!-- Wide spreading canopy arc -->
+    <path d="M-55 8 Q-55-30 -30-48 Q-10-58 0-58 Q10-58 30-48 Q55-30 55 8"
+          stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- Inner branch lines -->
+    <path d="M0 8 Q-25-8 -40-18" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+    <path d="M0 8 Q25-8 40-18" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+    <path d="M0 8 L0-30" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+    <!-- Leaf nodes at branch tips -->
+    <circle cx="-55" cy="8" r="5" stroke="white" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <circle cx="55" cy="8" r="5" stroke="white" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <circle cx="0" cy="-58" r="5" stroke="white" stroke-width="2.5" fill="none" opacity="0.8"/>
+    <circle cx="-40" cy="-18" r="4" stroke="white" stroke-width="2" fill="none" opacity="0.6"/>
+    <circle cx="40" cy="-18" r="4" stroke="white" stroke-width="2" fill="none" opacity="0.6"/>
+    <!-- Ground line -->
+    <line x1="-42" y1="60" x2="42" y2="60" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+  </g>
+</svg>

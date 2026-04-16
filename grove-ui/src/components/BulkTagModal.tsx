@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
-import { fileIcon } from '../format';
-import { fileUrl, IMAGE_MARKS } from '../api';
+import { fileUrl } from '../api';
+import Thumb from './Thumb';
 
 interface Props {
   files: FileMeta[];
@@ -34,11 +34,7 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
           <div className="space-y-1">
             {files.map((f) => (
               <div key={f.id} className="flex items-center gap-2 text-sm">
-                {IMAGE_MARKS.has(f.fileMark.toLowerCase()) ? (
-                  <img src={fileUrl(f.id)} alt="" className="w-6 h-6 object-cover rounded border border-border" />
-                ) : (
-                  <span className="text-base w-6 text-center">{fileIcon(f.fileMark)}</span>
-                )}
+                <Thumb mark={f.fileMark} src={fileUrl(f.id)} size="sm" />
                 <span className="truncate">{f.name}</span>
               </div>
             ))}

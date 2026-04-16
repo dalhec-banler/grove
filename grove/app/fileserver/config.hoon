@@ -6,5 +6,5 @@
 ++  extension  ^-  ?(%need %path %fall)
   %fall
 ++  auth  ^-  $@(? [? (list [path ?])])
-  |
+  &
 --

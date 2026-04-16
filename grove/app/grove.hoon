@@ -66,14 +66,30 @@
       blocked=(set @p)
       cache=(map [@p file-id] [file-meta octs])
       canopy=(map file-id canopy-entry)
+      cfg=[mode=?(%open %friends) friends=(set @p) name=@t]
+      peers=(map @p canopy-listing)
+      subs=(set @p)
+  ==
++$  state-6
+  $:  %6
+      f=(map file-id file-meta)
+      b=(map file-id octs)
+      v=(map @t [(set tag) @t])
+      s=(map share-token file-id)
+      al=(map file-id (set @p))
+      inbox=(map [@p file-id] inbox-entry)
+      trusted=(set @p)
+      blocked=(set @p)
+      cache=(map [@p file-id] [file-meta octs])
+      canopy=(map file-id canopy-entry)
       cfg=canopy-config
       peers=(map @p canopy-listing)
       subs=(set @p)
   ==
-+$  versioned-state  $%(state-5 state-4 state-3 state-2 state-1 state-0)
++$  versioned-state  $%(state-6 state-5 state-4 state-3 state-2 state-1 state-0)
 --
 %-  agent:dbug
-=|  state-5
+=|  state-6
 =*  state  -
 ^-  agent:gall
 |_  =bowl:gall
@@ -83,6 +99,7 @@
   :_  this
   :~  [%pass /bind-share %arvo %e %connect [~ /grove-share] %grove]
       [%pass /bind-file %arvo %e %connect [~ /grove-file] %grove]
+      [%pass /bind-remote %arvo %e %connect [~ /grove-remote-file] %grove]
   ==
 ++  on-save  !>(state)
 ++  on-load
@@ -91,12 +108,14 @@
   =/  old  !<(versioned-state old-vase)
   |^
   ?-  -.old
-      %5
+      %6
     :_  this(state old)
     :~  [%pass /bind-share %arvo %e %connect [~ /grove-share] %grove]
         [%pass /bind-file %arvo %e %connect [~ /grove-file] %grove]
+        [%pass /bind-remote %arvo %e %connect [~ /grove-remote-file] %grove]
     ==
     ::
+    %5  $(old (five-to-six old))
     %4  $(old (four-to-five old))
     %3  $(old (three-to-four old))
     %2  $(old (two-to-three old))
@@ -113,6 +132,16 @@
     |=  s=state-3
     ^-  state-4
     [%4 f=f.s b=b.s v=v.s s=s.s al=al.s inbox=~ trusted=~ blocked=~ cache=~]
+  ::
+  ++  five-to-six
+    |=  s=state-5
+    ^-  state-6
+    :*  %6  f=f.s  b=b.s  v=v.s  s=s.s  al=al.s  inbox=inbox.s
+        trusted=trusted.s  blocked=blocked.s  cache=cache.s
+        canopy=canopy.s
+        cfg=[mode=mode.cfg.s friends=friends.cfg.s name=name.cfg.s group-flag=~]
+        peers=peers.s  subs=subs.s
+    ==
   ::
   ++  four-to-five
     |=  s=state-4
@@ -396,6 +425,11 @@
       :-  (fact-update [%canopy-config-updated new-cfg])
       state(cfg new-cfg)
     ::
+        %set-canopy-group
+      =/  new-cfg  cfg(group-flag flag.a)
+      :-  :(weld (fact-update [%canopy-config-updated new-cfg]) (canopy-broadcast state(cfg new-cfg)))
+      state(cfg new-cfg)
+    ::
         %set-canopy-name
       =/  new-cfg  cfg(name name.a)
       :-  :(weld (fact-update [%canopy-config-updated new-cfg]) (canopy-broadcast state(cfg new-cfg)))
@@ -621,6 +655,8 @@
     [%x %canopy %search @ ~]
       =/  term=@t  i.t.t.t.path
       ``json+!>(`json`(canopy-search-json term))
+    [%x %canopy %groups ~]
+      ``json+!>(`json`(available-groups-json ~))
   ==
   ::
   ++  files-json
@@ -734,6 +770,50 @@
         name+s+name.cfg
         friends+[%a (turn ~(tap in friends.cfg) |=(p=@p s+(scot %p p)))]
         subscriptions+[%a (turn ~(tap in subs) |=(p=@p s+(scot %p p)))]
+        :-  %group-flag
+        ?~  group-flag.cfg  ~
+        =/  gf  u.group-flag.cfg
+        %-  pairs:enjs:format
+        :~  host+s+(scot %p -.gf)
+            name+s++.gf
+        ==
+    ==
+  ::
+  ++  available-groups-json
+    |=  *
+    ^-  json
+    =/  res=(unit json)
+      (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/json)))
+    ?~  res  [%a ~]
+    ?.  ?=([%o *] u.res)  [%a ~]
+    :-  %a
+    %+  turn  ~(tap by p.u.res)
+    |=  [key=@t val=json]
+    ^-  json
+    =/  ktp=tape  (trip key)
+    =/  idx=(unit @ud)  (find "/" ktp)
+    =/  host=@t  ?~(idx key (crip (scag u.idx ktp)))
+    =/  gname=@t  ?~(idx '' (crip (slag +(u.idx) ktp)))
+    =/  title=@t
+      ?.  ?=([%o *] val)  ''
+      =/  met  (~(get by p.val) 'meta')
+      ?~  met  ''
+      ?.  ?=([%o *] u.met)  ''
+      =/  tit  (~(get by p.u.met) 'title')
+      ?~  tit  ''
+      ?.  ?=([%s *] u.tit)  ''
+      p.u.tit
+    =/  members=@ud
+      ?.  ?=([%o *] val)  0
+      =/  fl  (~(get by p.val) 'fleet')
+      ?~  fl  0
+      ?.  ?=([%o *] u.fl)  0
+      ~(wyt by p.u.fl)
+    %-  pairs:enjs:format
+    :~  host+s+host
+        name+s+gname
+        title+s+title
+        members+(numb:enjs:format members)
     ==
   ::
   ++  canopy-listing-json
@@ -775,6 +855,17 @@
 ++  on-watch
   |=  =path
   ^-  (quip card _this)
+  =/  src-in-group=?
+    ?~  group-flag.cfg  %.n
+    =/  gf  u.group-flag.cfg
+    =/  res=(unit json)
+      (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
+    ?~  res  %.n
+    ?.  ?=([%o *] u.res)  %.n
+    =/  fl  (~(get by p.u.res) 'fleet')
+    ?~  fl  %.n
+    ?.  ?=([%o *] u.fl)  %.n
+    (~(has by p.u.fl) (scot %p src.bowl))
   ?+  path  (on-watch:def path)
     [%http-response *]  `this
     [%updates ~]        `this
@@ -791,6 +882,7 @@
           ?-  mode.cfg
             %open     %.y
             %friends  (~(has in friends.cfg) src.bowl)
+            %group    src-in-group
           ==
       ==
     ?.  ?|  =(our.bowl src.bowl)
@@ -815,6 +907,7 @@
       ?-  mode.cfg
         %open     %.y
         %friends  |(=(our.bowl src.bowl) (~(has in friends.cfg) src.bowl))
+        %group    |(=(our.bowl src.bowl) src-in-group)
       ==
     ?.  ok
       :_  this

@@ -12,6 +12,8 @@ export default {
         faint: '#ADADA5',
         accent: '#3A6BC5',
         'accent-soft': '#E8EEFB',
+        canopy: '#2E7D4F',
+        'canopy-soft': '#E6F4EC',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],

@@ -26,7 +26,7 @@
       accepted=?
   ==
 ::
-+$  canopy-mode  ?(%open %friends)
++$  canopy-mode  ?(%open %friends %group)
 ::
 +$  canopy-entry
   $:  id=file-id
@@ -42,6 +42,7 @@
   $:  mode=canopy-mode
       friends=(set @p)
       name=@t
+      group-flag=(unit [ship term])
   ==
 ::
 +$  canopy-listing
@@ -80,6 +81,7 @@
       [%add-friend who=@p]
       [%remove-friend who=@p]
       [%set-canopy-name name=@t]
+      [%set-canopy-group flag=(unit [ship term])]
       [%subscribe-to who=@p]
       [%unsubscribe-from who=@p]
   ==
