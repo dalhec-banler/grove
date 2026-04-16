@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { CanopyEntry, CanopyConfig, CanopyMode, GroupInfo, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { useEffect, useState } from 'react';
+import type { CanopyConfig, CanopyEntry, CanopyMode, GroupInfo, SortKey } from '../types';
+import { formatBytes, formatDate, normalizeShip } from '../format';
 import { fileUrl } from '../urls';
-import { GRID_STYLE } from '../styles';
-import FileIcon from './FileIcon';
 import Thumb from './Thumb';
-import { sortEntries, filterEntries, facets, toggleSetItem, FacetChips } from '../canopy-utils';
+import ListGridLayout from './ListGridLayout';
+import ShipChip from './ShipChip';
+import { useFacetFilter, FacetChips } from '../canopy-utils';
 
 export interface MineProps {
   kind: 'mine';
@@ -89,10 +89,7 @@ export default function MineView(p: MineProps) {
               <label className="text-xs text-muted block mb-1">Friends</label>
               <div className="flex flex-wrap gap-1 mb-2">
                 {p.config.friends.map((s) => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
-                    {s}
-                    <button onClick={() => p.onRemoveFriend(s)} className="text-faint hover:text-red-600">×</button>
-                  </span>
+                  <ShipChip key={s} ship={s} onRemove={() => p.onRemoveFriend(s)} />
                 ))}
                 {p.config.friends.length === 0 && <span className="text-xs text-faint">No friends yet</span>}
               </div>
@@ -151,13 +148,7 @@ export default function MineView(p: MineProps) {
 function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
   entries: CanopyEntry[]; search: string; sortKey: SortKey; viewMode: 'list' | 'grid'; onUnpublish: (id: string) => void;
 }) {
-  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
-  const { tags: tagFacets, types: typeFacets } = useMemo(() => facets(entries), [entries]);
-  const visible = useMemo(
-    () => sortEntries(filterEntries(entries, activeTags, activeTypes, search), sortKey),
-    [entries, activeTags, activeTypes, search, sortKey]
-  );
+  const { filtered: visible, tagFacets, typeFacets, activeTags, activeTypes, toggleTag, toggleType, clearFilters } = useFacetFilter(entries, search, sortKey);
 
   return (
     <section className="space-y-3">
@@ -171,24 +162,20 @@ function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
           <FacetChips
             tagFacets={tagFacets} typeFacets={typeFacets}
             activeTags={activeTags} activeTypes={activeTypes}
-            onToggleTag={(t) => setActiveTags(toggleSetItem(activeTags, t))}
-            onToggleType={(t) => setActiveTypes(toggleSetItem(activeTypes, t))}
-            onClear={() => { setActiveTags(new Set()); setActiveTypes(new Set()); }}
+            onToggleTag={toggleTag}
+            onToggleType={toggleType}
+            onClear={clearFilters}
           />
           {visible.length === 0 ? (
             <div className="text-xs text-faint">No entries match those filters.</div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid gap-4" style={GRID_STYLE}>
-              {visible.map((e) => (
-                <MineCard key={e.id} entry={e} onUnpublish={() => onUnpublish(e.id)} />
-              ))}
-            </div>
           ) : (
-            <div className="space-y-2">
-              {visible.map((e) => (
-                <MineRow key={e.id} entry={e} onUnpublish={() => onUnpublish(e.id)} />
-              ))}
-            </div>
+            <ListGridLayout
+              items={visible}
+              viewMode={viewMode}
+              keyFn={(e) => e.id}
+              renderRow={(e) => <MineRow entry={e} onUnpublish={() => onUnpublish(e.id)} />}
+              renderCard={(e) => <MineCard entry={e} onUnpublish={() => onUnpublish(e.id)} />}
+            />
           )}
         </>
       )}
@@ -220,11 +207,7 @@ function MineCard({ entry, onUnpublish }: { entry: CanopyEntry; onUnpublish: () 
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden">
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {IMAGE_MARKS.has(entry.fileMark.toLowerCase()) ? (
-          <img src={fileUrl(entry.id)} alt={entry.displayName} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
-        )}
+        <Thumb mark={entry.fileMark} src={fileUrl(entry.id)} size="fill" />
       </div>
       <div className="p-2">
         <div className="text-sm truncate" title={entry.displayName}>{entry.displayName}</div>

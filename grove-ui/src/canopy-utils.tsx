@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import type { CanopyEntry, SortKey } from './types';
 import { sortByKey } from './sort';
 
@@ -41,6 +42,26 @@ export function toggleSetItem<T>(set: Set<T>, item: T): Set<T> {
   const next = new Set(set);
   next.has(item) ? next.delete(item) : next.add(item);
   return next;
+}
+
+export function useFacetFilter(entries: CanopyEntry[], search: string, sortKey: SortKey) {
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
+  const { tags: tagFacets, types: typeFacets } = useMemo(() => facets(entries), [entries]);
+  const filtered = useMemo(
+    () => sortEntries(filterEntries(entries, activeTags, activeTypes, search), sortKey),
+    [entries, activeTags, activeTypes, search, sortKey],
+  );
+  return {
+    filtered,
+    tagFacets,
+    typeFacets,
+    activeTags,
+    activeTypes,
+    toggleTag: (t: string) => setActiveTags(toggleSetItem(activeTags, t)),
+    toggleType: (t: string) => setActiveTypes(toggleSetItem(activeTypes, t)),
+    clearFilters: () => { setActiveTags(new Set()); setActiveTypes(new Set()); },
+  };
 }
 
 export function FacetChips({

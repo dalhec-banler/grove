@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { CanopyEntry, CanopyListing, InboxEntry, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS } from '../format';
+import { formatBytes, formatDate } from '../format';
 import { remoteFileUrl } from '../urls';
-import { GRID_STYLE } from '../styles';
-import FileIcon from './FileIcon';
 import Thumb from './Thumb';
-import { sortEntries, filterEntries, facets, toggleSetItem, FacetChips } from '../canopy-utils';
+import ListGridLayout from './ListGridLayout';
+import PreviewPane from './PreviewPane';
+import { useFacetFilter, FacetChips } from '../canopy-utils';
 
 export interface PeerProps {
   kind: 'peer';
@@ -22,14 +22,8 @@ export interface PeerProps {
 }
 
 export default function PeerView(p: PeerProps) {
-  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const baseEntries = p.listing?.entries ?? [];
-  const { tags: tagFacets, types: typeFacets } = useMemo(() => facets(baseEntries), [baseEntries]);
-  const entries = useMemo(
-    () => sortEntries(filterEntries(baseEntries, activeTags, activeTypes, p.search), p.sortKey),
-    [baseEntries, activeTags, activeTypes, p.search, p.sortKey]
-  );
+  const { filtered: entries, tagFacets, typeFacets, activeTags, activeTypes, toggleTag, toggleType, clearFilters } = useFacetFilter(baseEntries, p.search, p.sortKey);
 
   if (!p.listing) {
     return (
@@ -60,50 +54,28 @@ export default function PeerView(p: PeerProps) {
       <FacetChips
         tagFacets={tagFacets} typeFacets={typeFacets}
         activeTags={activeTags} activeTypes={activeTypes}
-        onToggleTag={(t) => setActiveTags(toggleSetItem(activeTags, t))}
-        onToggleType={(t) => setActiveTypes(toggleSetItem(activeTypes, t))}
-        onClear={() => { setActiveTags(new Set()); setActiveTypes(new Set()); }}
+        onToggleTag={toggleTag}
+        onToggleType={toggleType}
+        onClear={clearFilters}
       />
       {entries.length === 0 ? (
         <div className="text-sm text-faint">
           {baseEntries.length === 0 ? 'This catalog is empty.' : 'No matches for those filters.'}
         </div>
-      ) : p.viewMode === 'grid' ? (
-        <div className="grid gap-4" style={GRID_STYLE}>
-          {entries.map((e) => {
-            const cacheKey = `${p.host}/${e.id}`;
-            const cached = p.cache.get(cacheKey);
-            return (
-              <PeerCard
-                key={e.id}
-                host={p.host}
-                entry={e}
-                cached={cached}
-                onFetch={() => p.onFetch(p.host, e.id)}
-                onPlant={() => p.onPlant(p.host, e.id)}
-                onDropCache={() => p.onDropCache(p.host, e.id)}
-              />
-            );
-          })}
-        </div>
       ) : (
-        <div className="space-y-2">
-          {entries.map((e) => {
-            const cacheKey = `${p.host}/${e.id}`;
-            const cached = p.cache.get(cacheKey);
-            return (
-              <PeerRow
-                key={e.id}
-                host={p.host}
-                entry={e}
-                cached={cached}
-                onFetch={() => p.onFetch(p.host, e.id)}
-                onPlant={() => p.onPlant(p.host, e.id)}
-                onDropCache={() => p.onDropCache(p.host, e.id)}
-              />
-            );
-          })}
-        </div>
+        <ListGridLayout
+          items={entries}
+          viewMode={p.viewMode}
+          keyFn={(e) => e.id}
+          renderRow={(e) => {
+            const cached = p.cache.get(`${p.host}/${e.id}`);
+            return <PeerRow host={p.host} entry={e} cached={cached} onFetch={() => p.onFetch(p.host, e.id)} onPlant={() => p.onPlant(p.host, e.id)} onDropCache={() => p.onDropCache(p.host, e.id)} />;
+          }}
+          renderCard={(e) => {
+            const cached = p.cache.get(`${p.host}/${e.id}`);
+            return <PeerCard host={p.host} entry={e} cached={cached} onFetch={() => p.onFetch(p.host, e.id)} onPlant={() => p.onPlant(p.host, e.id)} onDropCache={() => p.onDropCache(p.host, e.id)} />;
+          }}
+        />
       )}
     </div>
   );
@@ -114,7 +86,6 @@ function PeerRow({ host, entry, cached, onFetch, onPlant, onDropCache }: {
   onFetch: () => void; onPlant: () => void; onDropCache: () => void;
 }) {
   const [showPreview, setShowPreview] = useState(false);
-  const isImage = IMAGE_MARKS.has(entry.fileMark.toLowerCase());
   const isCached = !!cached?.cached;
 
   function open() {
@@ -155,16 +126,7 @@ function PeerRow({ host, entry, cached, onFetch, onPlant, onDropCache }: {
         </div>
       </div>
       {showPreview && isCached && (
-        <div className="mt-3 border-t border-border pt-3">
-          {isImage ? (
-            <img src={remoteFileUrl(host, entry.id)} alt={entry.displayName} className="max-h-96 mx-auto rounded" />
-          ) : (
-            <div className="text-xs text-muted">Preview not supported. Use Download.</div>
-          )}
-          <button onClick={() => { setShowPreview(false); onDropCache(); }} className="mt-2 text-xs text-muted hover:text-red-600">
-            Close & drop cache
-          </button>
-        </div>
+        <PreviewPane src={remoteFileUrl(host, entry.id)} name={entry.displayName} mark={entry.fileMark} onClose={() => { setShowPreview(false); onDropCache(); }} />
       )}
     </div>
   );
@@ -179,11 +141,7 @@ function PeerCard({ host, entry, cached, onFetch, onPlant, onDropCache }: {
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden cursor-pointer" onClick={() => { if (!isCached) onFetch(); }}>
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {IMAGE_MARKS.has(entry.fileMark.toLowerCase()) && isCached ? (
-          <img src={remoteFileUrl(host, entry.id)} alt={entry.displayName} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
-        )}
+        <Thumb mark={entry.fileMark} src={isCached ? remoteFileUrl(host, entry.id) : undefined} size="fill" />
       </div>
       <div className="p-2">
         <div className="text-sm truncate" title={entry.displayName}>{entry.displayName}</div>

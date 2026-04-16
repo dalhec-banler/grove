@@ -55,6 +55,8 @@ export default function App() {
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [files]);
 
+  const allTags = useMemo(() => tagCounts.map(([t]) => t).sort((a, b) => a.localeCompare(b)), [tagCounts]);
+
   const visibleFiles = useMemo(
     () => filterAndSortFiles(files, views, selection, search, fileSort),
     [files, views, selection, search, fileSort],
@@ -295,7 +297,7 @@ export default function App() {
       {showViewModal && (
         <ViewModal
           initial={editingView}
-          allTags={uniqueTags(files)}
+          allTags={allTags}
           onClose={() => setShowViewModal(false)}
           onSave={(name, tags, color) => {
             pokeSafe({ mkview: { name, tags, color } });
@@ -326,7 +328,7 @@ export default function App() {
       {upload.bulkTagIds && bulkTagFiles.length > 0 && (
         <BulkTagModal
           files={bulkTagFiles}
-          allTags={uniqueTags(files)}
+          allTags={allTags}
           onClose={() => upload.setBulkTagIds(null)}
           onApply={({ tags, makePublic }) => {
             for (const id of upload.bulkTagIds!) {
@@ -341,8 +343,3 @@ export default function App() {
   );
 }
 
-function uniqueTags(files: Map<string, FileMeta>): string[] {
-  const s = new Set<string>();
-  for (const f of files.values()) for (const t of f.tags) s.add(t);
-  return Array.from(s).sort((a, b) => a.localeCompare(b));
-}

@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import type { InboxEntry } from '../types';
-import { formatBytes, IMAGE_MARKS } from '../format';
+import { formatBytes } from '../format';
 import { remoteFileUrl } from '../urls';
-import FileIcon from './FileIcon';
 import Thumb from './Thumb';
+import PreviewPane from './PreviewPane';
 
 export function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }: {
   entry: InboxEntry; onFetch: () => void; onPlant: () => void; onDropCache: () => void; onDecline: () => void;
 }) {
   const [showPreview, setShowPreview] = useState(false);
-  const isImage = IMAGE_MARKS.has(entry.fileMark.toLowerCase());
 
   function open() {
     if (!entry.cached) {
@@ -54,16 +53,7 @@ export function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }:
         </div>
       </div>
       {showPreview && entry.cached && (
-        <div className="mt-3 border-t border-border pt-3">
-          {isImage ? (
-            <img src={remoteFileUrl(entry.owner, entry.fileId)} alt={entry.name} className="max-h-96 mx-auto rounded" />
-          ) : (
-            <div className="text-xs text-muted">Preview not supported. Use Download.</div>
-          )}
-          <button onClick={() => { setShowPreview(false); onDropCache(); }} className="mt-2 text-xs text-muted hover:text-red-600">
-            Close & drop cache
-          </button>
-        </div>
+        <PreviewPane src={remoteFileUrl(entry.owner, entry.fileId)} name={entry.name} mark={entry.fileMark} onClose={() => { setShowPreview(false); onDropCache(); }} />
       )}
     </div>
   );
@@ -72,16 +62,10 @@ export function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }:
 export function AcceptedCard({ entry, onFetch, onPlant, onDecline }: {
   entry: InboxEntry; onFetch: () => void; onPlant: () => void; onDecline: () => void;
 }) {
-  const isImage = IMAGE_MARKS.has(entry.fileMark.toLowerCase());
-
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden cursor-pointer" onClick={() => { if (!entry.cached) onFetch(); }}>
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {isImage && entry.cached ? (
-          <img src={remoteFileUrl(entry.owner, entry.fileId)} alt={entry.name} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
-        )}
+        <Thumb mark={entry.fileMark} src={entry.cached ? remoteFileUrl(entry.owner, entry.fileId) : undefined} size="fill" />
       </div>
       <div className="p-2">
         <div className="text-sm truncate" title={entry.name}>{entry.name}</div>

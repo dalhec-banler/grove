@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { normalizeShip } from '../format';
+import ShipChip from './ShipChip';
 
 export default function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }: {
   trusted: Set<string>; blocked: Set<string>;
@@ -23,10 +24,7 @@ export default function TrustList({ trusted, blocked, onUntrust, onUnblock, onTr
         <div className="text-xs text-muted mb-1">Trusted (offers auto-accept)</div>
         <div className="flex flex-wrap gap-1">
           {Array.from(trusted).sort((a, b) => a.localeCompare(b)).map((s) => (
-            <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
-              {s}
-              <button onClick={() => onUntrust(s)} className="text-faint hover:text-red-600">×</button>
-            </span>
+            <ShipChip key={s} ship={s} onRemove={() => onUntrust(s)} />
           ))}
           {trusted.size === 0 && <span className="text-xs text-faint">No trusted ships</span>}
         </div>
@@ -35,10 +33,7 @@ export default function TrustList({ trusted, blocked, onUntrust, onUnblock, onTr
         <div className="text-xs text-muted mb-1">Blocked (offers dropped silently)</div>
         <div className="flex flex-wrap gap-1">
           {Array.from(blocked).sort((a, b) => a.localeCompare(b)).map((s) => (
-            <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
-              {s}
-              <button onClick={() => onUnblock(s)} className="text-faint hover:text-red-600">×</button>
-            </span>
+            <ShipChip key={s} ship={s} onRemove={() => onUnblock(s)} />
           ))}
           {blocked.size === 0 && <span className="text-xs text-faint">No blocked ships</span>}
         </div>

@@ -1,9 +1,9 @@
 import type { InboxEntry, SortKey } from '../types';
 import { sortByKey } from '../sort';
-import { GRID_STYLE } from '../styles';
 import { PendingRow, PendingCard } from './InboxPending';
 import { AcceptedRow, AcceptedCard } from './InboxAccepted';
 import TrustList from './InboxTrust';
+import ListGridLayout from './ListGridLayout';
 
 interface Props {
   entries: InboxEntry[];
@@ -53,68 +53,37 @@ export default function InboxView({
     <div className="flex-1 overflow-y-auto p-6 space-y-8">
       {pending.length > 0 && (
         <Section title={`Pending offers (${pending.length})`}>
-          {viewMode === 'grid' ? (
-            <div className="grid gap-4" style={GRID_STYLE}>
-              {pending.map((e) => (
-                <PendingCard
-                  key={`${e.owner}/${e.fileId}`}
-                  entry={e}
-                  trusted={trusted.has(e.owner)}
-                  blocked={blocked.has(e.owner)}
-                  onAccept={() => onAccept(e)}
-                  onDecline={() => onDecline(e)}
-                  onTrust={() => onTrust(e.owner)}
-                  onBlock={() => onBlock(e.owner)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {pending.map((e) => (
-                <PendingRow
-                  key={`${e.owner}/${e.fileId}`}
-                  entry={e}
-                  trusted={trusted.has(e.owner)}
-                  blocked={blocked.has(e.owner)}
-                  onAccept={() => onAccept(e)}
-                  onDecline={() => onDecline(e)}
-                  onTrust={() => onTrust(e.owner)}
-                  onBlock={() => onBlock(e.owner)}
-                />
-              ))}
-            </div>
-          )}
+          <ListGridLayout
+            items={pending}
+            viewMode={viewMode}
+            keyFn={(e) => `${e.owner}/${e.fileId}`}
+            renderRow={(e) => (
+              <PendingRow entry={e} trusted={trusted.has(e.owner)} blocked={blocked.has(e.owner)}
+                onAccept={() => onAccept(e)} onDecline={() => onDecline(e)} onTrust={() => onTrust(e.owner)} onBlock={() => onBlock(e.owner)} />
+            )}
+            renderCard={(e) => (
+              <PendingCard entry={e} trusted={trusted.has(e.owner)} blocked={blocked.has(e.owner)}
+                onAccept={() => onAccept(e)} onDecline={() => onDecline(e)} onTrust={() => onTrust(e.owner)} onBlock={() => onBlock(e.owner)} />
+            )}
+          />
         </Section>
       )}
 
       <Section title={`Shared with me (${accepted.length})`}>
         {accepted.length === 0 ? (
           <div className="text-sm text-faint">Nothing shared with you yet.</div>
-        ) : viewMode === 'grid' ? (
-          <div className="grid gap-4" style={GRID_STYLE}>
-            {accepted.map((e) => (
-              <AcceptedCard
-                key={`${e.owner}/${e.fileId}`}
-                entry={e}
-                onFetch={() => onFetch(e)}
-                onPlant={() => onPlant(e)}
-                onDecline={() => onDecline(e)}
-              />
-            ))}
-          </div>
         ) : (
-          <div className="space-y-2">
-            {accepted.map((e) => (
-              <AcceptedRow
-                key={`${e.owner}/${e.fileId}`}
-                entry={e}
-                onFetch={() => onFetch(e)}
-                onPlant={() => onPlant(e)}
-                onDropCache={() => onDropCache(e)}
-                onDecline={() => onDecline(e)}
-              />
-            ))}
-          </div>
+          <ListGridLayout
+            items={accepted}
+            viewMode={viewMode}
+            keyFn={(e) => `${e.owner}/${e.fileId}`}
+            renderRow={(e) => (
+              <AcceptedRow entry={e} onFetch={() => onFetch(e)} onPlant={() => onPlant(e)} onDropCache={() => onDropCache(e)} onDecline={() => onDecline(e)} />
+            )}
+            renderCard={(e) => (
+              <AcceptedCard entry={e} onFetch={() => onFetch(e)} onPlant={() => onPlant(e)} onDecline={() => onDecline(e)} />
+            )}
+          />
         )}
       </Section>
 

@@ -13,6 +13,9 @@ export function waitForUploadEvents(
     const deadline = Date.now() + timeoutMs;
     function check() {
       if (ref.current.length >= expected || Date.now() >= deadline) {
+        if (ref.current.length < expected) {
+          console.warn(`[upload] timed out waiting for events: got ${ref.current.length}/${expected}`);
+        }
         resolve([...ref.current]);
         return;
       }

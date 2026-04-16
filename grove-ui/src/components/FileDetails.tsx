@@ -3,6 +3,7 @@ import type { FileMeta, Share } from '../types';
 import { formatBytes, formatDate, normalizeShip, addTag } from '../format';
 import { fileUrl } from '../urls';
 import Thumb from './Thumb';
+import ShipChip from './ShipChip';
 
 interface Props {
   file: FileMeta;
@@ -162,10 +163,7 @@ export default function FileDetails({ file, share, published, onClose, onRename,
         <div className="text-xs text-muted uppercase tracking-wider mb-2">Allowed ships</div>
         <div className="flex flex-wrap gap-1 mb-2">
           {file.allowed.map((s) => (
-            <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
-              {s}
-              <button onClick={() => removeShip(s)} className="text-faint hover:text-red-600">×</button>
-            </span>
+            <ShipChip key={s} ship={s} onRemove={() => removeShip(s)} />
           ))}
           {file.allowed.length === 0 && <span className="text-xs text-faint">No ships granted access</span>}
         </div>

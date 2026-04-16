@@ -9,6 +9,16 @@ import {
   subscribeUpdates,
 } from './api';
 
+function mapSet<K, V>(map: Map<K, V>, key: K, value: V): Map<K, V> {
+  return new Map(map).set(key, value);
+}
+
+function mapDel<K, V>(map: Map<K, V>, key: K): Map<K, V> {
+  const next = new Map(map);
+  next.delete(key);
+  return next;
+}
+
 export function useGroveData(
   isUploadingRef: React.MutableRefObject<boolean>,
   uploadCollectedRef: React.MutableRefObject<string[]>,
@@ -59,7 +69,7 @@ export function useGroveData(
             description: u.description, starred: u.starred,
             allowed: existing?.allowed ?? [],
           };
-          return new Map(prev).set(meta.id, meta);
+          return mapSet(prev, meta.id, meta);
         });
         if (u.type === 'fileAdded' && isUploadingRef.current) {
           uploadCollectedRef.current.push(u.fileId);
@@ -70,11 +80,11 @@ export function useGroveData(
         setFiles((prev) => {
           const fm = prev.get(u.fileId);
           if (!fm) return prev;
-          return new Map(prev).set(u.fileId, { ...fm, allowed: u.ships });
+          return mapSet(prev, u.fileId, { ...fm, allowed: u.ships });
         });
         break;
       case 'fileRemoved':
-        setFiles((prev) => { const n = new Map(prev); n.delete(u.fileId); return n; });
+        setFiles((prev) => mapDel(prev, u.fileId));
         setShares((prev) => {
           const n = new Map(prev);
           for (const [k, sh] of n) if (sh.fileId === u.fileId) n.delete(k);
@@ -82,16 +92,16 @@ export function useGroveData(
         });
         break;
       case 'viewAdded':
-        setViews((prev) => new Map(prev).set(u.name, { name: u.name, tags: u.tags, color: u.color }));
+        setViews((prev) => mapSet(prev, u.name, { name: u.name, tags: u.tags, color: u.color }));
         break;
       case 'viewRemoved':
-        setViews((prev) => { const n = new Map(prev); n.delete(u.name); return n; });
+        setViews((prev) => mapDel(prev, u.name));
         break;
       case 'shareAdded': {
         const fm = filesRef.current.get(u.fileId);
         if (fm) {
           const sh: Share = { token: u.token, fileId: u.fileId, name: fm.name };
-          setShares((ps) => new Map(ps).set(u.token, sh));
+          setShares((ps) => mapSet(ps, u.token, sh));
           setPendingShareFor((pending) => {
             if (pending === u.fileId) {
               setShareDialog(sh);
@@ -103,14 +113,14 @@ export function useGroveData(
         break;
       }
       case 'shareRemoved':
-        setShares((prev) => { const n = new Map(prev); n.delete(u.token); return n; });
+        setShares((prev) => mapDel(prev, u.token));
         break;
       case 'inboxAdded':
       case 'inboxUpdated':
-        setInbox((prev) => new Map(prev).set(`${u.entry.owner}/${u.entry.fileId}`, u.entry));
+        setInbox((prev) => mapSet(prev, `${u.entry.owner}/${u.entry.fileId}`, u.entry));
         break;
       case 'inboxRemoved':
-        setInbox((prev) => { const n = new Map(prev); n.delete(`${u.owner}/${u.fileId}`); return n; });
+        setInbox((prev) => mapDel(prev, `${u.owner}/${u.fileId}`));
         break;
       case 'trustedUpdated':
         setTrusted(new Set(u.trusted));
@@ -121,7 +131,7 @@ export function useGroveData(
           const k = `${u.owner}/${u.meta.id}`;
           const ent = prev.get(k);
           if (!ent) return prev;
-          return new Map(prev).set(k, { ...ent, cached: true });
+          return mapSet(prev, k, { ...ent, cached: true });
         });
         break;
       case 'cacheRemoved':
@@ -129,23 +139,23 @@ export function useGroveData(
           const k = `${u.owner}/${u.fileId}`;
           const ent = prev.get(k);
           if (!ent) return prev;
-          return new Map(prev).set(k, { ...ent, cached: false });
+          return mapSet(prev, k, { ...ent, cached: false });
         });
         break;
       case 'canopyEntryAdded':
-        setCanopyEntries((prev) => new Map(prev).set(u.entry.id, u.entry));
+        setCanopyEntries((prev) => mapSet(prev, u.entry.id, u.entry));
         break;
       case 'canopyEntryRemoved':
-        setCanopyEntries((prev) => { const n = new Map(prev); n.delete(u.fileId); return n; });
+        setCanopyEntries((prev) => mapDel(prev, u.fileId));
         break;
       case 'canopyConfigUpdated':
         setCanopyConfig(u.config);
         break;
       case 'canopyPeerUpdated':
-        setCanopyPeers((prev) => new Map(prev).set(u.listing.host, u.listing));
+        setCanopyPeers((prev) => mapSet(prev, u.listing.host, u.listing));
         break;
       case 'canopyPeerRemoved':
-        setCanopyPeers((prev) => { const n = new Map(prev); n.delete(u.host); return n; });
+        setCanopyPeers((prev) => mapDel(prev, u.host));
         break;
     }
   }, [isUploadingRef, uploadCollectedRef]);

@@ -1,8 +1,8 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS } from '../format';
+import { formatBytes, formatDate } from '../format';
 import { fileUrl } from '../urls';
 import { GRID_STYLE } from '../styles';
-import FileIcon from './FileIcon';
+import Thumb from './Thumb';
 
 interface Props {
   files: FileMeta[];
@@ -50,11 +50,7 @@ function Card({ file, active, onSelect, onToggleStar, onShare, onDelete }: {
       className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${active ? 'border-accent ring-2 ring-accent-soft' : 'border-border hover:border-ink/20'}`}
     >
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {IMAGE_MARKS.has(file.fileMark.toLowerCase()) ? (
-          <img src={fileUrl(file.id)} alt={file.name} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <FileIcon mark={file.fileMark} className="w-16 h-16" />
-        )}
+        <Thumb mark={file.fileMark} src={fileUrl(file.id)} size="fill" />
       </div>
       <div className="p-2">
         <div className="text-sm truncate" title={file.name}>{file.name}</div>
