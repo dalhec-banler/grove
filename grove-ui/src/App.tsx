@@ -3,7 +3,7 @@ import type {
   FileMeta, View, Share, Selection, Update, InboxEntry,
   CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo, SortKey,
 } from './types';
-import api, {
+import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
   scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
   poke, pokeSafe, subscribeUpdates, fileToBase64,
@@ -22,6 +22,52 @@ import CanopyView from './components/CanopyView';
 import PublishModal from './components/PublishModal';
 
 type ViewMode = 'list' | 'grid';
+
+const SORT_KEYS: Set<string> = new Set(['newest', 'oldest', 'name-asc', 'name-desc', 'largest', 'smallest', 'type']);
+const VIEW_MODES: Set<string> = new Set(['list', 'grid']);
+
+export function parseSortKey(v: string): SortKey {
+  return SORT_KEYS.has(v) ? v as SortKey : 'newest';
+}
+
+export function parseViewMode(v: string): ViewMode {
+  return VIEW_MODES.has(v) ? v as ViewMode : 'grid';
+}
+
+export function filterAndSortFiles(
+  files: Map<string, FileMeta>,
+  views: Map<string, View>,
+  selection: Selection,
+  search: string,
+  sortKey: SortKey,
+): FileMeta[] {
+  let list = Array.from(files.values());
+  if (selection.kind === 'starred') list = list.filter((f) => f.starred);
+  else if (selection.kind === 'view') {
+    const view = views.get(selection.name);
+    if (!view) list = [];
+    else if (view.tags.length > 0) list = list.filter((f) => view.tags.every((t) => f.tags.includes(t)));
+  } else if (selection.kind === 'tag') {
+    list = list.filter((f) => f.tags.includes(selection.name));
+  }
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    list = list.filter((f) =>
+      f.name.toLowerCase().includes(q) ||
+      f.tags.some((t) => t.toLowerCase().includes(q))
+    );
+  }
+  switch (sortKey) {
+    case 'newest':   list.sort((a, b) => b.modified.localeCompare(a.modified)); break;
+    case 'oldest':   list.sort((a, b) => a.modified.localeCompare(b.modified)); break;
+    case 'name-asc': list.sort((a, b) => a.name.localeCompare(b.name)); break;
+    case 'name-desc':list.sort((a, b) => b.name.localeCompare(a.name)); break;
+    case 'largest':  list.sort((a, b) => b.size - a.size); break;
+    case 'smallest': list.sort((a, b) => a.size - b.size); break;
+    case 'type':     list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name)); break;
+  }
+  return list;
+}
 
 export default function App() {
   const [files, setFiles] = useState<Map<string, FileMeta>>(new Map());
@@ -44,7 +90,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    (localStorage.getItem('grove:viewMode') as ViewMode) || 'grid'
+    parseViewMode(localStorage.getItem('grove:viewMode') ?? 'grid')
   );
   const [fileSort, setFileSort] = useState<SortKey>('newest');
   const [canopySort, setCanopySort] = useState<SortKey>('newest');
@@ -88,13 +134,11 @@ export default function App() {
   }, [refreshAll]);
 
   useEffect(() => {
-    let subId: number | undefined;
-    subscribeUpdates(handleUpdate, () => {
-      refreshAll().catch((e) => console.error('reconnect refresh failed', e));
-    }).then((id) => { subId = id; });
-    return () => {
-      if (subId !== undefined) api.unsubscribe(subId);
-    };
+    const handle = subscribeUpdates(handleUpdate, {
+      onQuit: () => refreshAll().catch((e) => console.error('reconnect refresh failed', e)),
+      onError: () => setConnected(false),
+    });
+    return () => handle.cancel();
   }, [refreshAll]);
 
   const handleUpdate = useCallback((u: Update) => {
@@ -238,34 +282,10 @@ export default function App() {
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [files]);
 
-  const visibleFiles = useMemo(() => {
-    let list = Array.from(files.values());
-    if (selection.kind === 'starred') list = list.filter((f) => f.starred);
-    else if (selection.kind === 'view') {
-      const view = views.get(selection.name);
-      if (!view) list = [];
-      else if (view.tags.length > 0) list = list.filter((f) => view.tags.every((t) => f.tags.includes(t)));
-    } else if (selection.kind === 'tag') {
-      list = list.filter((f) => f.tags.includes(selection.name));
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.tags.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-    switch (fileSort) {
-      case 'newest':   list.sort((a, b) => b.modified.localeCompare(a.modified)); break;
-      case 'oldest':   list.sort((a, b) => a.modified.localeCompare(b.modified)); break;
-      case 'name-asc': list.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case 'name-desc':list.sort((a, b) => b.name.localeCompare(a.name)); break;
-      case 'largest':  list.sort((a, b) => b.size - a.size); break;
-      case 'smallest': list.sort((a, b) => a.size - b.size); break;
-      case 'type':     list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name)); break;
-    }
-    return list;
-  }, [files, views, selection, search, fileSort]);
+  const visibleFiles = useMemo(
+    () => filterAndSortFiles(files, views, selection, search, fileSort),
+    [files, views, selection, search, fileSort],
+  );
 
   const activeFile = activeFileId ? files.get(activeFileId) ?? null : null;
   const shareForActive = useMemo(() => {
@@ -319,6 +339,32 @@ export default function App() {
 
   const isCanopySelection =
     selection.kind === 'canopy-mine' || selection.kind === 'canopy-browse' || selection.kind === 'canopy-peer';
+
+  const toolbarProps = useMemo(() => {
+    if (isCanopySelection) return {
+      search: canopySearch, onSearchChange: setCanopySearch,
+      sortKey: canopySort, onSortChange: setCanopySort,
+      viewMode: canopyViewMode, onViewModeChange: setCanopyViewMode,
+      placeholder: 'Search entries…', tint: 'canopy' as const,
+    };
+    if (selection.kind === 'inbox') return {
+      search: inboxSearch, onSearchChange: setInboxSearch,
+      sortKey: inboxSort, onSortChange: setInboxSort,
+      viewMode: inboxViewMode, onViewModeChange: setInboxViewMode,
+      placeholder: 'Search shared…', tint: 'accent' as const,
+    };
+    return {
+      search, onSearchChange: setSearch,
+      sortKey: fileSort, onSortChange: setFileSort,
+      viewMode, onViewModeChange: setViewMode,
+      placeholder: 'Search files & tags…', tint: 'accent' as const,
+    };
+  }, [
+    isCanopySelection, selection.kind,
+    canopySearch, canopySort, canopyViewMode,
+    inboxSearch, inboxSort, inboxViewMode,
+    search, fileSort, viewMode,
+  ]);
 
   const activeTitle =
     selection.kind === 'all' ? 'All files' :
@@ -379,16 +425,7 @@ export default function App() {
             ) : activeTitle}
           </h1>
           {selection.kind !== 'canopy-browse' && (
-            <ToolbarControls
-              search={isCanopySelection ? canopySearch : selection.kind === 'inbox' ? inboxSearch : search}
-              onSearchChange={isCanopySelection ? setCanopySearch : selection.kind === 'inbox' ? setInboxSearch : setSearch}
-              sortKey={isCanopySelection ? canopySort : selection.kind === 'inbox' ? inboxSort : fileSort}
-              onSortChange={isCanopySelection ? setCanopySort : selection.kind === 'inbox' ? setInboxSort : setFileSort}
-              viewMode={isCanopySelection ? canopyViewMode : selection.kind === 'inbox' ? inboxViewMode : viewMode}
-              onViewModeChange={isCanopySelection ? setCanopyViewMode : selection.kind === 'inbox' ? setInboxViewMode : setViewMode}
-              placeholder={isCanopySelection ? 'Search entries…' : selection.kind === 'inbox' ? 'Search shared…' : 'Search files & tags…'}
-              tint={isCanopySelection ? 'canopy' : 'accent'}
-            />
+            <ToolbarControls {...toolbarProps} />
           )}
           {selection.kind === 'canopy-browse' && <div className="flex-1" />}
           <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
@@ -588,7 +625,7 @@ function ToolbarControls({ search, onSearchChange, sortKey, onSortChange, viewMo
       <div className="ml-auto flex items-center gap-3">
         <select
           value={sortKey}
-          onChange={(e) => onSortChange(e.target.value as SortKey)}
+          onChange={(e) => onSortChange(parseSortKey(e.target.value))}
           className="text-xs border border-border rounded px-2 py-1 bg-surface"
         >
           <option value="newest">Newest first</option>

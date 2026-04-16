@@ -9,13 +9,25 @@ declare global {
   interface Window { ship: string }
 }
 
-const api = new Urbit('', '', 'grove');
-api.ship = (window.ship ?? '').replace(/^~/, '');
-api.onError = (err) => console.error('[urbit]', err);
-api.onRetry = () => console.warn('[urbit] retrying');
-api.onOpen = () => console.log('[urbit] connected');
+const CANOPY_MODES: Set<string> = new Set(['open', 'friends', 'group']);
+function parseCanopyMode(v: unknown): CanopyMode {
+  return typeof v === 'string' && CANOPY_MODES.has(v) ? v as CanopyMode : 'open';
+}
 
-export default api;
+let _api: Urbit | null = null;
+
+function getApi(): Urbit {
+  if (!_api) {
+    _api = new Urbit('', '', 'grove');
+    _api.ship = (window.ship ?? '').replace(/^~/, '');
+    _api.onError = (err) => console.error('[urbit]', err);
+    _api.onRetry = () => console.warn('[urbit] retrying');
+    _api.onOpen = () => console.log('[urbit] connected');
+  }
+  return _api;
+}
+
+export { getApi };
 
 function fileFromJson(o: any): FileMeta {
   return {
@@ -33,17 +45,17 @@ function fileFromJson(o: any): FileMeta {
 }
 
 export async function scryFiles(): Promise<FileMeta[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/files' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/files' });
   return (raw ?? []).map(fileFromJson);
 }
 
 export async function scryViews(): Promise<View[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/views' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/views' });
   return (raw ?? []).map((v) => ({ name: v.name, tags: v.tags ?? [], color: v.color }));
 }
 
 export async function scryShares(): Promise<Share[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/shares' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/shares' });
   return (raw ?? []).map((s) => ({ token: s.token, fileId: s['file-id'], name: s.name }));
 }
 
@@ -61,12 +73,12 @@ function entryFromJson(o: any): InboxEntry {
 }
 
 export async function scryInbox(): Promise<InboxEntry[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/inbox' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/inbox' });
   return (raw ?? []).map(entryFromJson);
 }
 
 export async function scryTrusted(): Promise<Trust> {
-  const raw = await api.scry<any>({ app: 'grove', path: '/trusted' });
+  const raw = await getApi().scry<any>({ app: 'grove', path: '/trusted' });
   return { trusted: raw?.trusted ?? [], blocked: raw?.blocked ?? [] };
 }
 
@@ -84,7 +96,7 @@ function canopyEntryFromJson(o: any): CanopyEntry {
 
 function canopyConfigFromJson(o: any): CanopyConfig {
   return {
-    mode: (o.mode as CanopyMode) ?? 'open',
+    mode: parseCanopyMode(o.mode),
     name: o.name ?? '',
     friends: o.friends ?? [],
     groupFlag: o['group-flag'] && o['group-flag'].host
@@ -97,33 +109,35 @@ function canopyListingFromJson(o: any): CanopyListing {
   return {
     host: o.host,
     name: o.name ?? '',
-    mode: (o.mode as CanopyMode) ?? 'open',
+    mode: parseCanopyMode(o.mode),
     entries: (o.entries ?? []).map(canopyEntryFromJson),
   };
 }
 
 export async function scryCanopyEntries(): Promise<CanopyEntry[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/canopy/entries' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/canopy/entries' });
   return (raw ?? []).map(canopyEntryFromJson);
 }
 
 export async function scryCanopyConfig(): Promise<CanopyConfig> {
-  const raw = await api.scry<any>({ app: 'grove', path: '/canopy/config' });
+  const raw = await getApi().scry<any>({ app: 'grove', path: '/canopy/config' });
   return canopyConfigFromJson(raw ?? {});
 }
 
 export async function scryCanopyPeers(): Promise<CanopyListing[]> {
-  const raw = await api.scry<any[]>({ app: 'grove', path: '/canopy/peers' });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/canopy/peers' });
   return (raw ?? []).map(canopyListingFromJson);
 }
 
 export async function scryCanopyPeer(ship: string): Promise<CanopyListing | null> {
   const s = ship.startsWith('~') ? ship.slice(1) : ship;
   try {
-    const raw = await api.scry<any>({ app: 'grove', path: `/canopy/peer/~${s}` });
+    const raw = await getApi().scry<any>({ app: 'grove', path: `/canopy/peer/~${s}` });
     if (!raw) return null;
     return canopyListingFromJson(raw);
-  } catch (_e) {
+  } catch (e: any) {
+    if (e?.status === 404 || e?.message?.includes('404')) return null;
+    console.error(`[scryCanopyPeer] ${ship}:`, e);
     return null;
   }
 }
@@ -136,27 +150,29 @@ export interface CanopySearchHit {
 export async function scryCanopySearch(term: string): Promise<CanopySearchHit[]> {
   const t = term.trim();
   if (!t) return [];
-  const raw = await api.scry<any[]>({ app: 'grove', path: `/canopy/search/${encodeURIComponent(t)}` });
+  const raw = await getApi().scry<any[]>({ app: 'grove', path: `/canopy/search/${encodeURIComponent(t)}` });
   return (raw ?? []).map((h: any) => ({ host: h.host, entry: canopyEntryFromJson(h.entry) }));
 }
 
 export async function scryGroups(): Promise<GroupInfo[]> {
   try {
-    const raw = await api.scry<any[]>({ app: 'grove', path: '/canopy/groups' });
+    const raw = await getApi().scry<any[]>({ app: 'grove', path: '/canopy/groups' });
     return (raw ?? []).map((g: any) => ({
       host: g.host,
       name: g.name,
       title: g.title ?? '',
       members: g.members ?? 0,
     }));
-  } catch (_e) {
+  } catch (e: any) {
+    if (e?.status === 404 || e?.message?.includes('404')) return [];
+    console.error('[scryGroups]', e);
     return [];
   }
 }
 
 export function poke(action: GroveAction): Promise<void> {
   return new Promise((resolve, reject) => {
-    api.poke({
+    getApi().poke({
       app: 'grove',
       mark: 'grove-action',
       json: action,
@@ -173,31 +189,55 @@ export function pokeSafe(action: GroveAction): void {
   });
 }
 
+export interface SubscriptionHandle {
+  id: Promise<number>;
+  cancel: () => void;
+}
+
 export function subscribeUpdates(
   onEvent: (u: Update) => void,
-  onQuit?: () => void,
-): Promise<number> {
-  const doSub = (): Promise<number> =>
-    api.subscribe({
+  opts?: { onQuit?: () => void; onError?: (e: unknown) => void },
+): SubscriptionHandle {
+  let cancelled = false;
+  let latestSubId: number | undefined;
+
+  const openSubscription = (): Promise<number> =>
+    getApi().subscribe({
       app: 'grove',
       path: '/updates',
       event: (data: any) => {
         const norm = normalizeUpdate(data);
         if (norm) onEvent(norm);
       },
-      err: (e) => console.error('[sub err]', e),
+      err: (e) => {
+        console.error('[sub err]', e);
+        opts?.onError?.(e);
+      },
       quit: () => {
+        if (cancelled) return;
         console.warn('[sub quit] reconnecting in 2s…');
         setTimeout(() => {
-          doSub().catch((e) => console.error('[sub reconnect]', e));
-          if (onQuit) onQuit();
+          if (cancelled) return;
+          openSubscription()
+            .then((id) => { latestSubId = id; })
+            .catch((e) => console.error('[sub reconnect]', e));
+          opts?.onQuit?.();
         }, 2000);
       },
     });
-  return doSub();
+
+  const id = openSubscription().then((subId) => { latestSubId = subId; return subId; });
+
+  return {
+    id,
+    cancel() {
+      cancelled = true;
+      if (latestSubId !== undefined) getApi().unsubscribe(latestSubId);
+    },
+  };
 }
 
-function normalizeUpdate(data: any): Update | null {
+export function normalizeUpdate(data: any): Update | null {
   if (!data || !data.type) return null;
   switch (data.type) {
     case 'fileAdded':

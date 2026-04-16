@@ -23,55 +23,54 @@ function shortShip(ship: string): string {
   return '~' + s;
 }
 
-export default function Sidebar(p: Props) {
-  const sel = p.selection;
+export default function Sidebar({
+  views, tagCounts, selection, onSelect, onNewView, onEditView, onDeleteView,
+  counts, connected, shipName, canopyPeers, onUnsubscribeCanopy,
+}: Props) {
   const [viewsOpen, setViewsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
   const [subsOpen, setSubsOpen] = useState(true);
   const [tagFilter, setTagFilter] = useState('');
 
-  const filteredTags = p.tagCounts.filter(([t]) =>
+  const filteredTags = tagCounts.filter(([t]) =>
     !tagFilter || t.toLowerCase().includes(tagFilter.toLowerCase())
   );
 
   return (
     <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
-      {/* Grove header */}
       <div className="h-14 flex items-center gap-2 px-4 border-b border-border">
         <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-white text-sm font-semibold">G</div>
         <div className="min-w-0 flex-1">
           <div className="font-medium leading-tight">Grove</div>
-          <div className="text-[10px] text-faint font-mono truncate leading-tight">{shortShip(p.shipName)}</div>
+          <div className="text-[10px] text-faint font-mono truncate leading-tight">{shortShip(shipName)}</div>
         </div>
-        <span className={`w-2 h-2 rounded-full ${p.connected ? 'bg-green-500' : 'bg-faint'}`} title={p.connected ? 'connected' : 'connecting…'} />
+        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-faint'}`} title={connected ? 'connected' : 'connecting…'} />
       </div>
 
-      {/* Scrollable content */}
       <nav className="flex-1 overflow-y-auto">
-        {/* Grove section */}
         <div className="py-3">
           <SidebarItem
             label="All files"
-            count={p.counts.all}
-            active={sel.kind === 'all'}
-            onClick={() => p.onSelect({ kind: 'all' })}
+            count={counts.all}
+            active={selection.kind === 'all'}
+            onClick={() => onSelect({ kind: 'all' })}
           />
           <SidebarItem
             label="Starred"
-            count={p.counts.starred}
-            active={sel.kind === 'starred'}
-            onClick={() => p.onSelect({ kind: 'starred' })}
+            count={counts.starred}
+            active={selection.kind === 'starred'}
+            onClick={() => onSelect({ kind: 'starred' })}
           />
           <button
-            onClick={() => p.onSelect({ kind: 'inbox' })}
-            className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${sel.kind === 'inbox' ? 'bg-accent-soft text-accent font-medium' : 'text-ink hover:bg-bg'}`}
+            onClick={() => onSelect({ kind: 'inbox' })}
+            className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${selection.kind === 'inbox' ? 'bg-accent-soft text-accent font-medium' : 'text-ink hover:bg-bg'}`}
           >
             <span className="truncate">Shared with me</span>
             <span className="flex items-center gap-1.5 ml-2">
-              {p.counts.inboxPending > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{p.counts.inboxPending}</span>
+              {counts.inboxPending > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{counts.inboxPending}</span>
               )}
-              <span className="text-xs text-faint">{p.counts.inbox}</span>
+              <span className="text-xs text-faint">{counts.inbox}</span>
             </span>
           </button>
 
@@ -79,22 +78,22 @@ export default function Sidebar(p: Props) {
             label="Views"
             open={viewsOpen}
             onToggle={() => setViewsOpen(!viewsOpen)}
-            onAdd={p.onNewView}
+            onAdd={onNewView}
             addTitle="New view"
           />
           {viewsOpen && (
             <div className="mt-1">
-              {p.views.length === 0 && (
+              {views.length === 0 && (
                 <div className="px-4 py-2 text-xs text-faint">No views yet</div>
               )}
-              {p.views.map((v) => (
+              {views.map((v) => (
                 <ViewItem
                   key={v.name}
                   view={v}
-                  active={sel.kind === 'view' && sel.name === v.name}
-                  onClick={() => p.onSelect({ kind: 'view', name: v.name })}
-                  onEdit={() => p.onEditView(v)}
-                  onDelete={() => { if (confirm(`Delete view "${v.name}"?`)) p.onDeleteView(v); }}
+                  active={selection.kind === 'view' && selection.name === v.name}
+                  onClick={() => onSelect({ kind: 'view', name: v.name })}
+                  onEdit={() => onEditView(v)}
+                  onDelete={() => { if (confirm(`Delete view "${v.name}"?`)) onDeleteView(v); }}
                 />
               ))}
             </div>
@@ -107,7 +106,7 @@ export default function Sidebar(p: Props) {
           />
           {tagsOpen && (
             <div className="mt-1">
-              {p.tagCounts.length === 0 ? (
+              {tagCounts.length === 0 ? (
                 <div className="px-4 py-2 text-xs text-faint">No tags yet</div>
               ) : (
                 <>
@@ -124,8 +123,8 @@ export default function Sidebar(p: Props) {
                       key={tag}
                       label={`#${tag}`}
                       count={count}
-                      active={sel.kind === 'tag' && sel.name === tag}
-                      onClick={() => p.onSelect({ kind: 'tag', name: tag })}
+                      active={selection.kind === 'tag' && selection.name === tag}
+                      onClick={() => onSelect({ kind: 'tag', name: tag })}
                     />
                   ))}
                   {filteredTags.length === 0 && (
@@ -137,7 +136,6 @@ export default function Sidebar(p: Props) {
           )}
         </div>
 
-        {/* Canopy section */}
         <div className="border-t border-border">
           <div className="h-12 flex items-center gap-2 px-4 border-b border-border">
             <div className="w-7 h-7 rounded-md bg-canopy flex items-center justify-center text-white text-sm font-semibold">C</div>
@@ -147,32 +145,32 @@ export default function Sidebar(p: Props) {
           <div className="py-2">
             <SidebarItem
               label="My canopy"
-              count={p.counts.canopy}
-              active={sel.kind === 'canopy-mine'}
-              onClick={() => p.onSelect({ kind: 'canopy-mine' })}
+              count={counts.canopy}
+              active={selection.kind === 'canopy-mine'}
+              onClick={() => onSelect({ kind: 'canopy-mine' })}
               color="canopy"
             />
             <button
-              onClick={() => p.onSelect({ kind: 'canopy-browse' })}
-              className={`w-full px-4 py-1.5 flex items-center text-sm ${sel.kind === 'canopy-browse' ? 'bg-canopy-soft text-canopy font-medium' : 'text-ink hover:bg-bg'}`}
+              onClick={() => onSelect({ kind: 'canopy-browse' })}
+              className={`w-full px-4 py-1.5 flex items-center text-sm ${selection.kind === 'canopy-browse' ? 'bg-canopy-soft text-canopy font-medium' : 'text-ink hover:bg-bg'}`}
             >
               <span className="truncate">Browse</span>
             </button>
-            {p.canopyPeers.length > 0 && (
+            {canopyPeers.length > 0 && (
               <SectionHeader
-                label={`Subscriptions (${p.canopyPeers.length})`}
+                label={`Subscriptions (${canopyPeers.length})`}
                 open={subsOpen}
                 onToggle={() => setSubsOpen(!subsOpen)}
                 small
               />
             )}
-            {subsOpen && p.canopyPeers.map((ship) => (
+            {subsOpen && canopyPeers.map((ship) => (
               <PeerItem
                 key={ship}
                 ship={ship}
-                active={sel.kind === 'canopy-peer' && sel.ship === ship}
-                onClick={() => p.onSelect({ kind: 'canopy-peer', ship })}
-                onUnsubscribe={() => { if (confirm(`Unsubscribe from ${ship}?`)) p.onUnsubscribeCanopy(ship); }}
+                active={selection.kind === 'canopy-peer' && selection.ship === ship}
+                onClick={() => onSelect({ kind: 'canopy-peer', ship })}
+                onUnsubscribe={() => { if (confirm(`Unsubscribe from ${ship}?`)) onUnsubscribeCanopy(ship); }}
               />
             ))}
           </div>

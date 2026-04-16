@@ -44,22 +44,30 @@ function filterInbox(entries: InboxEntry[], search: string): InboxEntry[] {
   });
 }
 
-export default function InboxView(p: Props) {
-  const pending = sortInbox(filterInbox(p.entries.filter((e) => !e.accepted), p.search), p.sortKey);
-  const accepted = sortInbox(filterInbox(p.entries.filter((e) => e.accepted), p.search), p.sortKey);
+export default function InboxView({
+  entries, trusted, blocked, search, sortKey, viewMode,
+  onAccept, onDecline, onTrust, onUntrust, onBlock, onUnblock,
+  onFetch, onPlant, onDropCache,
+}: Props) {
+  const pending = sortInbox(filterInbox(entries.filter((e) => !e.accepted), search), sortKey);
+  const accepted = sortInbox(filterInbox(entries.filter((e) => e.accepted), search), sortKey);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-8">
       {pending.length > 0 && (
         <Section title={`Pending offers (${pending.length})`}>
-          {p.viewMode === 'grid' ? (
+          {viewMode === 'grid' ? (
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
               {pending.map((e) => (
                 <PendingCard
                   key={`${e.owner}/${e.fileId}`}
                   entry={e}
-                  onAccept={() => p.onAccept(e)}
-                  onDecline={() => p.onDecline(e)}
+                  trusted={trusted.has(e.owner)}
+                  blocked={blocked.has(e.owner)}
+                  onAccept={() => onAccept(e)}
+                  onDecline={() => onDecline(e)}
+                  onTrust={() => onTrust(e.owner)}
+                  onBlock={() => onBlock(e.owner)}
                 />
               ))}
             </div>
@@ -69,12 +77,12 @@ export default function InboxView(p: Props) {
                 <PendingRow
                   key={`${e.owner}/${e.fileId}`}
                   entry={e}
-                  trusted={p.trusted.has(e.owner)}
-                  blocked={p.blocked.has(e.owner)}
-                  onAccept={() => p.onAccept(e)}
-                  onDecline={() => p.onDecline(e)}
-                  onTrust={() => p.onTrust(e.owner)}
-                  onBlock={() => p.onBlock(e.owner)}
+                  trusted={trusted.has(e.owner)}
+                  blocked={blocked.has(e.owner)}
+                  onAccept={() => onAccept(e)}
+                  onDecline={() => onDecline(e)}
+                  onTrust={() => onTrust(e.owner)}
+                  onBlock={() => onBlock(e.owner)}
                 />
               ))}
             </div>
@@ -85,15 +93,15 @@ export default function InboxView(p: Props) {
       <Section title={`Shared with me (${accepted.length})`}>
         {accepted.length === 0 ? (
           <div className="text-sm text-faint">Nothing shared with you yet.</div>
-        ) : p.viewMode === 'grid' ? (
+        ) : viewMode === 'grid' ? (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
             {accepted.map((e) => (
               <AcceptedCard
                 key={`${e.owner}/${e.fileId}`}
                 entry={e}
-                onFetch={() => p.onFetch(e)}
-                onPlant={() => p.onPlant(e)}
-                onDecline={() => p.onDecline(e)}
+                onFetch={() => onFetch(e)}
+                onPlant={() => onPlant(e)}
+                onDecline={() => onDecline(e)}
               />
             ))}
           </div>
@@ -103,10 +111,10 @@ export default function InboxView(p: Props) {
               <AcceptedRow
                 key={`${e.owner}/${e.fileId}`}
                 entry={e}
-                onFetch={() => p.onFetch(e)}
-                onPlant={() => p.onPlant(e)}
-                onDropCache={() => p.onDropCache(e)}
-                onDecline={() => p.onDecline(e)}
+                onFetch={() => onFetch(e)}
+                onPlant={() => onPlant(e)}
+                onDropCache={() => onDropCache(e)}
+                onDecline={() => onDecline(e)}
               />
             ))}
           </div>
@@ -115,12 +123,12 @@ export default function InboxView(p: Props) {
 
       <Section title="Trust">
         <TrustList
-          trusted={p.trusted}
-          blocked={p.blocked}
-          onUntrust={p.onUntrust}
-          onUnblock={p.onUnblock}
-          onTrust={p.onTrust}
-          onBlock={p.onBlock}
+          trusted={trusted}
+          blocked={blocked}
+          onUntrust={onUntrust}
+          onUnblock={onUnblock}
+          onTrust={onTrust}
+          onBlock={onBlock}
         />
       </Section>
     </div>
@@ -232,8 +240,9 @@ function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }: {
   );
 }
 
-function PendingCard({ entry, onAccept, onDecline }: {
-  entry: InboxEntry; onAccept: () => void; onDecline: () => void;
+function PendingCard({ entry, trusted, blocked, onAccept, onDecline, onTrust, onBlock }: {
+  entry: InboxEntry; trusted: boolean; blocked: boolean;
+  onAccept: () => void; onDecline: () => void; onTrust: () => void; onBlock: () => void;
 }) {
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden">
@@ -246,14 +255,14 @@ function PendingCard({ entry, onAccept, onDecline }: {
         <div className="text-xs text-faint">{formatBytes(entry.size)}</div>
       </div>
       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
-        <button
-          onClick={onAccept}
-          className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90"
-        >Accept</button>
-        <button
-          onClick={onDecline}
-          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600"
-        >×</button>
+        <button onClick={onAccept} className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90">Accept</button>
+        {!trusted && (
+          <button onClick={onTrust} className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-accent" title="Trust">✓</button>
+        )}
+        {!blocked && (
+          <button onClick={onBlock} className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600" title="Block">⊘</button>
+        )}
+        <button onClick={onDecline} className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600">×</button>
       </div>
     </div>
   );
