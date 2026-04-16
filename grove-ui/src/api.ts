@@ -9,9 +9,9 @@ declare global {
   interface Window { ship?: string }
 }
 
-const CANOPY_MODES: Set<string> = new Set(['open', 'friends', 'group']);
+const CANOPY_MODES = new Set<CanopyMode>(['open', 'friends', 'group']);
 function parseCanopyMode(v: unknown): CanopyMode {
-  return typeof v === 'string' && CANOPY_MODES.has(v) ? v as CanopyMode : 'open';
+  return typeof v === 'string' && CANOPY_MODES.has(v as CanopyMode) ? (v as CanopyMode) : 'open';
 }
 
 let _api: Urbit | null = null;

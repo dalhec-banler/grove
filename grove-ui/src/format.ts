@@ -29,10 +29,10 @@ export function inferMark(filename: string): string {
   return parts.pop()!.toLowerCase() || 'bin';
 }
 
-const VIEW_MODES: Set<string> = new Set(['list', 'grid']);
+const VIEW_MODES = new Set<'list' | 'grid'>(['list', 'grid']);
 
 export function parseViewMode(v: string): 'list' | 'grid' {
-  return VIEW_MODES.has(v) ? v as 'list' | 'grid' : 'grid';
+  return VIEW_MODES.has(v as 'list' | 'grid') ? (v as 'list' | 'grid') : 'grid';
 }
 
 const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;

@@ -21,8 +21,8 @@ export function sortByKey<T>(list: T[], key: SortKey, acc: SortAccessors<T>): T[
   return sorted;
 }
 
-const SORT_KEYS: Set<string> = new Set(['newest', 'oldest', 'name-asc', 'name-desc', 'largest', 'smallest', 'type']);
+const SORT_KEYS = new Set<SortKey>(['newest', 'oldest', 'name-asc', 'name-desc', 'largest', 'smallest', 'type']);
 
 export function parseSortKey(v: string): SortKey {
-  return SORT_KEYS.has(v) ? v as SortKey : 'newest';
+  return SORT_KEYS.has(v as SortKey) ? (v as SortKey) : 'newest';
 }
