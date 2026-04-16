@@ -59,8 +59,8 @@ export function AcceptedRow({ entry, onFetch, onPlant, onDropCache, onDecline }:
   );
 }
 
-export function AcceptedCard({ entry, onFetch, onPlant, onDecline }: {
-  entry: InboxEntry; onFetch: () => void; onPlant: () => void; onDecline: () => void;
+export function AcceptedCard({ entry, onFetch, onPlant, onDropCache, onDecline }: {
+  entry: InboxEntry; onFetch: () => void; onPlant: () => void; onDropCache: () => void; onDecline: () => void;
 }) {
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden cursor-pointer" onClick={() => { if (!entry.cached) onFetch(); }}>

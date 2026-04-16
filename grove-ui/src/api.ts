@@ -284,6 +284,7 @@ export function normalizeUpdate(data: any): Update | null {
     case 'canopyPeerRemoved':
       return { type: 'canopyPeerRemoved', host: data.host };
   }
+  console.warn('[normalizeUpdate] unrecognized update type:', data.type);
   return null;
 }
 

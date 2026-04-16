@@ -16,11 +16,15 @@ export function PendingRow({ entry, trusted, blocked, onAccept, onDecline, onTru
         <div className="text-xs text-faint">{formatBytes(entry.size)} · offered {formatDate(entry.offered)}</div>
       </div>
       <div className="flex flex-col gap-1">
-        <button onClick={onAccept} className="text-xs px-2 py-1 rounded bg-accent text-white hover:opacity-90">Accept</button>
+        {blocked ? (
+          <span className="text-xs px-2 py-1 text-red-600">Blocked</span>
+        ) : (
+          <button onClick={onAccept} className="text-xs px-2 py-1 rounded bg-accent text-white hover:opacity-90">Accept</button>
+        )}
         <button onClick={onDecline} className="text-xs px-2 py-1 rounded text-muted hover:text-red-600">Decline</button>
       </div>
       <div className="flex flex-col gap-1">
-        {!trusted && (
+        {!trusted && !blocked && (
           <button onClick={onTrust} className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-accent" title="Always accept from this ship">
             Trust
           </button>
@@ -50,8 +54,10 @@ export function PendingCard({ entry, trusted, blocked, onAccept, onDecline, onTr
         <div className="text-xs text-faint">{formatBytes(entry.size)}</div>
       </div>
       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
-        <button onClick={onAccept} className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90">Accept</button>
-        {!trusted && (
+        {!blocked && (
+          <button onClick={onAccept} className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90">Accept</button>
+        )}
+        {!trusted && !blocked && (
           <button onClick={onTrust} className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-accent" title="Trust">✓</button>
         )}
         {!blocked && (

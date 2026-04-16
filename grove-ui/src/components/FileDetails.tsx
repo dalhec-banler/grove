@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FileMeta, Share } from '../types';
 import { formatBytes, formatDate, normalizeShip, addTag } from '../format';
 import { fileUrl } from '../urls';
@@ -29,6 +29,8 @@ export default function FileDetails({ file, share, published, onClose, onRename,
   const [shipError, setShipError] = useState<string | null>(null);
   const [notify, setNotify] = useState(true);
 
+  useEffect(() => { setNameDraft(file.name); setRenaming(false); }, [file.id]);
+
   function handleAddTag() {
     const updated = addTag(file.tags, tagDraft);
     if (!updated) return;
@@ -40,6 +42,8 @@ export default function FileDetails({ file, share, published, onClose, onRename,
     const norm = normalizeShip(shipDraft);
     if (!norm) { setShipError('not a valid @p'); return; }
     if (file.allowed.includes(norm)) { setShipError('already on the list'); return; }
+    const ourShip = `~${(window.ship ?? '').replace(/^~/, '')}`;
+    if (norm === ourShip) { setShipError("can't share with yourself"); return; }
     setShipError(null);
     onSetAllowed([...file.allowed, norm], notify);
     setShipDraft('');

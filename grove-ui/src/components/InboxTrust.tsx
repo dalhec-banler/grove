@@ -13,8 +13,13 @@ export default function TrustList({ trusted, blocked, onUntrust, onUnblock, onTr
   function addShip() {
     const norm = normalizeShip(draft);
     if (!norm) return;
-    if (mode === 'trust') onTrust(norm);
-    else onBlock(norm);
+    if (mode === 'trust') {
+      if (blocked.has(norm)) onUnblock(norm);
+      onTrust(norm);
+    } else {
+      if (trusted.has(norm)) onUntrust(norm);
+      onBlock(norm);
+    }
     setDraft('');
   }
 

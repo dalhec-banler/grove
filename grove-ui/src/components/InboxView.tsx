@@ -81,7 +81,7 @@ export default function InboxView({
               <AcceptedRow entry={e} onFetch={() => onFetch(e)} onPlant={() => onPlant(e)} onDropCache={() => onDropCache(e)} onDecline={() => onDecline(e)} />
             )}
             renderCard={(e) => (
-              <AcceptedCard entry={e} onFetch={() => onFetch(e)} onPlant={() => onPlant(e)} onDecline={() => onDecline(e)} />
+              <AcceptedCard entry={e} onFetch={() => onFetch(e)} onPlant={() => onPlant(e)} onDropCache={() => onDropCache(e)} onDecline={() => onDecline(e)} />
             )}
           />
         )}
