@@ -1,5 +1,6 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate, fileUrl } from '../format';
+import { formatBytes, formatDate } from '../format';
+import { fileUrl } from '../urls';
 import Thumb from './Thumb';
 
 interface Props {
@@ -11,8 +12,8 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-export default function FileList(p: Props) {
-  if (p.files.length === 0) {
+export default function FileList({ files, activeId, onSelect, onToggleStar, onShare, onDelete }: Props) {
+  if (files.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-faint text-sm">
         No files here. Drop one above to upload.
@@ -33,15 +34,15 @@ export default function FileList(p: Props) {
           </tr>
         </thead>
         <tbody>
-          {p.files.map((f) => (
+          {files.map((f) => (
             <tr
               key={f.id}
-              onClick={() => p.onSelect(f.id)}
-              className={`border-b border-border cursor-pointer group ${p.activeId === f.id ? 'bg-accent-soft' : 'hover:bg-bg'}`}
+              onClick={() => onSelect(f.id)}
+              className={`border-b border-border cursor-pointer group ${activeId === f.id ? 'bg-accent-soft' : 'hover:bg-bg'}`}
             >
               <td className="pl-4 pr-1">
                 <button
-                  onClick={(e) => { e.stopPropagation(); p.onToggleStar(f.id); }}
+                  onClick={(e) => { e.stopPropagation(); onToggleStar(f.id); }}
                   className={`text-base ${f.starred ? 'text-amber-500' : 'text-faint hover:text-amber-500'}`}
                   title={f.starred ? 'Unstar' : 'Star'}
                 >
@@ -74,11 +75,11 @@ export default function FileList(p: Props) {
                   >Download</a>
                   <button
                     className="text-xs text-muted hover:text-accent"
-                    onClick={(e) => { e.stopPropagation(); p.onShare(f.id); }}
+                    onClick={(e) => { e.stopPropagation(); onShare(f.id); }}
                   >Share</button>
                   <button
                     className="text-xs text-muted hover:text-red-600"
-                    onClick={(e) => { e.stopPropagation(); p.onDelete(f.id); }}
+                    onClick={(e) => { e.stopPropagation(); onDelete(f.id); }}
                   >Delete</button>
                 </div>
               </td>

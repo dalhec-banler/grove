@@ -1,24 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, InboxEntry, GroupInfo, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip, fileUrl, remoteFileUrl } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { fileUrl, remoteFileUrl } from '../urls';
+import { sortByKey } from '../sort';
+import { GRID_STYLE } from '../styles';
 import FileIcon from './FileIcon';
 import { scryCanopySearch, CanopySearchHit } from '../api';
 import Thumb from './Thumb';
 
-function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[] {
-  const list = entries.slice();
-  switch (key) {
-    case 'newest':    return list.sort((a, b) => b.published.localeCompare(a.published));
-    case 'oldest':    return list.sort((a, b) => a.published.localeCompare(b.published));
-    case 'name-asc':  return list.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    case 'name-desc': return list.sort((a, b) => b.displayName.localeCompare(a.displayName));
-    case 'largest':   return list.sort((a, b) => b.size - a.size);
-    case 'smallest':  return list.sort((a, b) => a.size - b.size);
-    case 'type':      return list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.displayName.localeCompare(b.displayName));
-  }
+export function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[] {
+  return sortByKey(entries, key, {
+    name: (e) => e.displayName,
+    date: (e) => e.published,
+    size: (e) => e.size,
+    type: (e) => e.fileMark,
+  });
 }
 
-function filterEntries(entries: CanopyEntry[], tags: Set<string>, types: Set<string>, search: string): CanopyEntry[] {
+export function filterEntries(entries: CanopyEntry[], tags: Set<string>, types: Set<string>, search: string): CanopyEntry[] {
   const q = search.trim().toLowerCase();
   return entries.filter((e) => {
     if (tags.size > 0 && !Array.from(tags).every((t) => e.tags.includes(t))) return false;
@@ -31,7 +30,7 @@ function filterEntries(entries: CanopyEntry[], tags: Set<string>, types: Set<str
   });
 }
 
-function facets(entries: CanopyEntry[]): { tags: Array<[string, number]>; types: Array<[string, number]> } {
+export function facets(entries: CanopyEntry[]): { tags: Array<[string, number]>; types: Array<[string, number]> } {
   const t = new Map<string, number>();
   const m = new Map<string, number>();
   for (const e of entries) {
@@ -309,7 +308,7 @@ function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
           {visible.length === 0 ? (
             <div className="text-xs text-faint">No entries match those filters.</div>
           ) : viewMode === 'grid' ? (
-            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+            <div className="grid gap-4" style={GRID_STYLE}>
               {visible.map((e) => (
                 <MineCard key={e.id} entry={e} onUnpublish={() => onUnpublish(e.id)} />
               ))}
@@ -384,22 +383,22 @@ function MineCard({ entry, onUnpublish }: { entry: CanopyEntry; onUnpublish: () 
 
 function BrowseView(p: BrowseProps) {
   const [peerDraft, setPeerDraft] = useState('');
-  const [peerError, setPeerErr] = useState<string | null>(null);
+  const [peerError, setPeerError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [hits, setHits] = useState<CanopySearchHit[]>([]);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchErr] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     const q = searchTerm.trim();
-    if (!q) { setHits([]); setSearchErr(null); return; }
+    if (!q) { setHits([]); setSearchError(null); return; }
     let cancelled = false;
     setSearching(true);
-    setSearchErr(null);
+    setSearchError(null);
     const h = setTimeout(() => {
       scryCanopySearch(q)
         .then((r) => { if (!cancelled) setHits(r); })
-        .catch((e) => { if (!cancelled) { console.error('search', e); setSearchErr('Search failed — try again.'); } })
+        .catch((e) => { if (!cancelled) { console.error('search', e); setSearchError('Search failed — try again.'); } })
         .finally(() => { if (!cancelled) setSearching(false); });
     }, 250);
     return () => { cancelled = true; clearTimeout(h); };
@@ -407,8 +406,8 @@ function BrowseView(p: BrowseProps) {
 
   function subscribe() {
     const norm = normalizeShip(peerDraft);
-    if (!norm) { setPeerErr('not a valid @p'); return; }
-    setPeerErr(null);
+    if (!norm) { setPeerError('not a valid @p'); return; }
+    setPeerError(null);
     p.onSubscribe(norm);
     setPeerDraft('');
   }
@@ -423,7 +422,7 @@ function BrowseView(p: BrowseProps) {
         <div className="flex gap-2">
           <input
             value={peerDraft}
-            onChange={(e) => { setPeerDraft(e.target.value); setPeerErr(null); }}
+            onChange={(e) => { setPeerDraft(e.target.value); setPeerError(null); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); subscribe(); } }}
             placeholder="~sampel-palnet"
             className="flex-1 border border-border rounded px-2 py-1 text-sm font-mono"
@@ -523,7 +522,7 @@ function PeerView(p: PeerProps) {
           {baseEntries.length === 0 ? 'This catalog is empty.' : 'No matches for those filters.'}
         </div>
       ) : p.viewMode === 'grid' ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+        <div className="grid gap-4" style={GRID_STYLE}>
           {entries.map((e) => {
             const cacheKey = `${p.host}/${e.id}`;
             const cached = p.cache.get(cacheKey);

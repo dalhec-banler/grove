@@ -6,7 +6,7 @@ import type {
 } from './types';
 
 declare global {
-  interface Window { ship: string }
+  interface Window { ship?: string }
 }
 
 const CANOPY_MODES: Set<string> = new Set(['open', 'friends', 'group']);

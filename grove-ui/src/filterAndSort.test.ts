@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { filterAndSortFiles, parseSortKey, parseViewMode } from './App';
+import { filterAndSortFiles } from './filter';
+import { parseSortKey } from './sort';
+import { parseViewMode } from './format';
 import type { FileMeta, View, Selection } from './types';
 
 function mkFile(overrides: Partial<FileMeta> & { id: string }): FileMeta {

@@ -20,21 +20,19 @@ export function formatDate(da: string): string {
     : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif']);
+export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'tiff']);
 
 export function inferMark(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  if (!ext) return 'bin';
-  return ext;
+  if (!filename) return 'bin';
+  const parts = filename.split('.');
+  if (parts.length === 1) return 'bin';
+  return parts.pop()!.toLowerCase() || 'bin';
 }
 
-export function fileUrl(id: string): string {
-  return `/grove-file/${id}`;
-}
+const VIEW_MODES: Set<string> = new Set(['list', 'grid']);
 
-export function remoteFileUrl(owner: string, id: string): string {
-  const o = owner.startsWith('~') ? owner.slice(1) : owner;
-  return `/grove-remote-file/~${o}/${id}`;
+export function parseViewMode(v: string): 'list' | 'grid' {
+  return VIEW_MODES.has(v) ? v as 'list' | 'grid' : 'grid';
 }
 
 const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;

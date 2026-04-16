@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import type { InboxEntry, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip, remoteFileUrl } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { remoteFileUrl } from '../urls';
+import { sortByKey } from '../sort';
+import { GRID_STYLE } from '../styles';
 import FileIcon from './FileIcon';
 import Thumb from './Thumb';
 
@@ -23,16 +26,12 @@ interface Props {
 }
 
 function sortInbox(entries: InboxEntry[], key: SortKey): InboxEntry[] {
-  const list = entries.slice();
-  switch (key) {
-    case 'newest':    return list.sort((a, b) => b.offered.localeCompare(a.offered));
-    case 'oldest':    return list.sort((a, b) => a.offered.localeCompare(b.offered));
-    case 'name-asc':  return list.sort((a, b) => a.name.localeCompare(b.name));
-    case 'name-desc': return list.sort((a, b) => b.name.localeCompare(a.name));
-    case 'largest':   return list.sort((a, b) => b.size - a.size);
-    case 'smallest':  return list.sort((a, b) => a.size - b.size);
-    case 'type':      return list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name));
-  }
+  return sortByKey(entries, key, {
+    name: (e) => e.name,
+    date: (e) => e.offered,
+    size: (e) => e.size,
+    type: (e) => e.fileMark,
+  });
 }
 
 function filterInbox(entries: InboxEntry[], search: string): InboxEntry[] {
@@ -57,7 +56,7 @@ export default function InboxView({
       {pending.length > 0 && (
         <Section title={`Pending offers (${pending.length})`}>
           {viewMode === 'grid' ? (
-            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+            <div className="grid gap-4" style={GRID_STYLE}>
               {pending.map((e) => (
                 <PendingCard
                   key={`${e.owner}/${e.fileId}`}
@@ -94,7 +93,7 @@ export default function InboxView({
         {accepted.length === 0 ? (
           <div className="text-sm text-faint">Nothing shared with you yet.</div>
         ) : viewMode === 'grid' ? (
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+          <div className="grid gap-4" style={GRID_STYLE}>
             {accepted.map((e) => (
               <AcceptedCard
                 key={`${e.owner}/${e.fileId}`}
@@ -337,7 +336,7 @@ function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }:
       <div>
         <div className="text-xs text-muted mb-1">Trusted (offers auto-accept)</div>
         <div className="flex flex-wrap gap-1">
-          {Array.from(trusted).sort().map((s) => (
+          {Array.from(trusted).sort((a, b) => a.localeCompare(b)).map((s) => (
             <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
               {s}
               <button onClick={() => onUntrust(s)} className="text-faint hover:text-red-600">×</button>
@@ -349,7 +348,7 @@ function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }:
       <div>
         <div className="text-xs text-muted mb-1">Blocked (offers dropped silently)</div>
         <div className="flex flex-wrap gap-1">
-          {Array.from(blocked).sort().map((s) => (
+          {Array.from(blocked).sort((a, b) => a.localeCompare(b)).map((s) => (
             <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
               {s}
               <button onClick={() => onUnblock(s)} className="text-faint hover:text-red-600">×</button>

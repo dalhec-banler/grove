@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { View } from '../types';
 import { addTag } from '../format';
+import Backdrop from './Backdrop';
 
 interface Props {
   initial: View | null;
@@ -11,11 +12,11 @@ interface Props {
 
 const PALETTE = ['#3A6BC5', '#D97706', '#059669', '#DC2626', '#7C3AED', '#DB2777', '#0EA5E9', '#65A30D'];
 
-export default function ViewModal(p: Props) {
-  const [name, setName] = useState(p.initial?.name ?? '');
-  const [tags, setTags] = useState<string[]>(p.initial?.tags ?? []);
+export default function ViewModal({ initial, allTags, onClose, onSave }: Props) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagInput, setTagInput] = useState('');
-  const [color, setColor] = useState(p.initial?.color ?? PALETTE[0]);
+  const [color, setColor] = useState(initial?.color ?? PALETTE[0]);
 
   function handleAddTag(t: string) {
     const updated = addTag(tags, t);
@@ -27,15 +28,15 @@ export default function ViewModal(p: Props) {
   const disabled = !name.trim() || tags.length === 0;
 
   return (
-    <Backdrop onClose={p.onClose}>
+    <Backdrop onClose={onClose}>
       <div className="bg-surface rounded-lg shadow-xl w-[420px] p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-medium mb-4">{p.initial ? 'Edit view' : 'New view'}</h2>
+        <h2 className="text-lg font-medium mb-4">{initial ? 'Edit view' : 'New view'}</h2>
         <label className="block text-xs text-muted mb-1">Name</label>
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
-          disabled={!!p.initial}
+          disabled={!!initial}
           placeholder="photos"
           className="w-full border border-border rounded px-2 py-1.5 text-sm mb-3 disabled:bg-bg"
         />
@@ -57,9 +58,9 @@ export default function ViewModal(p: Props) {
           placeholder="type a tag and press Enter"
           className="w-full border border-border rounded px-2 py-1.5 text-sm mb-2"
         />
-        {p.allTags.length > 0 && (
+        {allTags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {p.allTags.filter((t) => !tags.includes(t)).map((t) => (
+            {allTags.filter((t) => !tags.includes(t)).map((t) => (
               <button key={t} onClick={() => handleAddTag(t)} className="text-xs px-1.5 py-0.5 rounded border border-border text-muted hover:bg-bg">
                 + {t}
               </button>
@@ -78,9 +79,9 @@ export default function ViewModal(p: Props) {
           ))}
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={p.onClose} className="text-sm px-3 py-1.5 text-muted hover:text-ink">Cancel</button>
+          <button onClick={onClose} className="text-sm px-3 py-1.5 text-muted hover:text-ink">Cancel</button>
           <button
-            onClick={() => p.onSave(name.trim(), tags, color)}
+            onClick={() => onSave(name.trim(), tags, color)}
             disabled={disabled}
             className="text-sm px-3 py-1.5 rounded-md bg-accent text-white disabled:opacity-50"
           >
@@ -89,13 +90,5 @@ export default function ViewModal(p: Props) {
         </div>
       </div>
     </Backdrop>
-  );
-}
-
-function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      {children}
-    </div>
   );
 }

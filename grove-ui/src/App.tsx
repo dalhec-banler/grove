@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  FileMeta, View, Share, Selection, Update, InboxEntry,
-  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo, SortKey,
-} from './types';
-import {
-  scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
-  scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
-  poke, pokeSafe, subscribeUpdates, fileToBase64,
-} from './api';
-import { inferMark } from './format';
+import type { FileMeta, View, Selection, CanopyMode, SortKey, ViewMode } from './types';
+import { poke, pokeSafe } from './api';
+import { parseViewMode } from './format';
+import { filterAndSortFiles } from './filter';
+import { useGroveData } from './useGroveData';
+import { useUpload } from './useUpload';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
 import FileGrid from './components/FileGrid';
@@ -19,75 +15,26 @@ import FileDetails from './components/FileDetails';
 import BulkTagModal from './components/BulkTagModal';
 import InboxView from './components/InboxView';
 import CanopyView from './components/CanopyView';
+import ToolbarControls from './components/ToolbarControls';
 import PublishModal from './components/PublishModal';
 
-type ViewMode = 'list' | 'grid';
-
-const SORT_KEYS: Set<string> = new Set(['newest', 'oldest', 'name-asc', 'name-desc', 'largest', 'smallest', 'type']);
-const VIEW_MODES: Set<string> = new Set(['list', 'grid']);
-
-export function parseSortKey(v: string): SortKey {
-  return SORT_KEYS.has(v) ? v as SortKey : 'newest';
-}
-
-export function parseViewMode(v: string): ViewMode {
-  return VIEW_MODES.has(v) ? v as ViewMode : 'grid';
-}
-
-export function filterAndSortFiles(
-  files: Map<string, FileMeta>,
-  views: Map<string, View>,
-  selection: Selection,
-  search: string,
-  sortKey: SortKey,
-): FileMeta[] {
-  let list = Array.from(files.values());
-  if (selection.kind === 'starred') list = list.filter((f) => f.starred);
-  else if (selection.kind === 'view') {
-    const view = views.get(selection.name);
-    if (!view) list = [];
-    else if (view.tags.length > 0) list = list.filter((f) => view.tags.every((t) => f.tags.includes(t)));
-  } else if (selection.kind === 'tag') {
-    list = list.filter((f) => f.tags.includes(selection.name));
-  }
-  if (search.trim()) {
-    const q = search.trim().toLowerCase();
-    list = list.filter((f) =>
-      f.name.toLowerCase().includes(q) ||
-      f.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  }
-  switch (sortKey) {
-    case 'newest':   list.sort((a, b) => b.modified.localeCompare(a.modified)); break;
-    case 'oldest':   list.sort((a, b) => a.modified.localeCompare(b.modified)); break;
-    case 'name-asc': list.sort((a, b) => a.name.localeCompare(b.name)); break;
-    case 'name-desc':list.sort((a, b) => b.name.localeCompare(a.name)); break;
-    case 'largest':  list.sort((a, b) => b.size - a.size); break;
-    case 'smallest': list.sort((a, b) => a.size - b.size); break;
-    case 'type':     list.sort((a, b) => a.fileMark.localeCompare(b.fileMark) || a.name.localeCompare(b.name)); break;
-  }
-  return list;
-}
-
 export default function App() {
-  const [files, setFiles] = useState<Map<string, FileMeta>>(new Map());
-  const [views, setViews] = useState<Map<string, View>>(new Map());
-  const [shares, setShares] = useState<Map<string, Share>>(new Map());
-  const [inbox, setInbox] = useState<Map<string, InboxEntry>>(new Map());
-  const [trusted, setTrusted] = useState<Set<string>>(new Set());
-  const [blocked, setBlocked] = useState<Set<string>>(new Set());
-  const [canopyEntries, setCanopyEntries] = useState<Map<string, CanopyEntry>>(new Map());
-  const [canopyConfig, setCanopyConfig] = useState<CanopyConfig>({ mode: 'open', name: '', friends: [], groupFlag: null });
-  const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
-  const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
+  const isUploadingRef = useRef(false);
+  const uploadCollectedRef = useRef<string[]>([]);
+
+  const {
+    files, setFiles, views, shares, inbox, trusted, blocked,
+    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, availableGroups,
+    connected, setPendingShareFor, shareDialog, setShareDialog,
+  } = useGroveData(isUploadingRef, uploadCollectedRef);
+
+  const upload = useUpload(setFiles, isUploadingRef, uploadCollectedRef);
+
   const [selection, setSelection] = useState<Selection>({ kind: 'all' });
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [editingView, setEditingView] = useState<View | null>(null);
-  const [shareDialog, setShareDialog] = useState<Share | null>(null);
-  const [pendingShareFor, setPendingShareFor] = useState<string | null>(null);
   const [publishingFile, setPublishingFile] = useState<FileMeta | null>(null);
-  const [connected, setConnected] = useState(false);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     parseViewMode(localStorage.getItem('grove:viewMode') ?? 'grid')
@@ -99,182 +46,8 @@ export default function App() {
   const [inboxSort, setInboxSort] = useState<SortKey>('newest');
   const [inboxViewMode, setInboxViewMode] = useState<ViewMode>('list');
   const [inboxSearch, setInboxSearch] = useState('');
-  const [uploadBusy, setUploadBusy] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
-  const [bulkTagIds, setBulkTagIds] = useState<string[] | null>(null);
-  const [dragActive, setDragActive] = useState(false);
-  const dragCounter = useRef(0);
-  const isUploadingRef = useRef(false);
-  const uploadCollectedRef = useRef<string[]>([]);
-  const filesRef = useRef(files);
-  filesRef.current = files;
 
   useEffect(() => { localStorage.setItem('grove:viewMode', viewMode); }, [viewMode]);
-
-  const refreshAll = useCallback(async () => {
-    const [f, v, s, ib, tr, ce, cc, cp, gr] = await Promise.all([
-      scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
-      scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
-    ]);
-    setFiles(new Map(f.map((m) => [m.id, m])));
-    setViews(new Map(v.map((w) => [w.name, w])));
-    setShares(new Map(s.map((sh) => [sh.token, sh])));
-    setInbox(new Map(ib.map((e) => [`${e.owner}/${e.fileId}`, e])));
-    setTrusted(new Set(tr.trusted));
-    setBlocked(new Set(tr.blocked));
-    setCanopyEntries(new Map(ce.map((e) => [e.id, e])));
-    setCanopyConfig(cc);
-    setCanopyPeers(new Map(cp.map((l) => [l.host, l])));
-    setAvailableGroups(gr);
-    setConnected(true);
-  }, []);
-
-  useEffect(() => {
-    refreshAll().catch((e) => console.error('initial load failed', e));
-  }, [refreshAll]);
-
-  useEffect(() => {
-    const handle = subscribeUpdates(handleUpdate, {
-      onQuit: () => refreshAll().catch((e) => console.error('reconnect refresh failed', e)),
-      onError: () => setConnected(false),
-    });
-    return () => handle.cancel();
-  }, [refreshAll]);
-
-  const handleUpdate = useCallback((u: Update) => {
-    switch (u.type) {
-      case 'fileAdded':
-      case 'fileUpdated': {
-        setFiles((prev) => {
-          const existing = prev.get(u.fileId);
-          const meta: FileMeta = {
-            id: u.fileId, name: u.name, fileMark: u.fileMark, size: u.size,
-            tags: u.tags, created: u.created, modified: u.modified,
-            description: u.description, starred: u.starred,
-            allowed: existing?.allowed ?? [],
-          };
-          return new Map(prev).set(meta.id, meta);
-        });
-        if (u.type === 'fileAdded' && isUploadingRef.current) {
-          uploadCollectedRef.current.push(u.fileId);
-        }
-        break;
-      }
-      case 'allowedUpdated':
-        setFiles((prev) => {
-          const fm = prev.get(u.fileId);
-          if (!fm) return prev;
-          return new Map(prev).set(u.fileId, { ...fm, allowed: u.ships });
-        });
-        break;
-      case 'fileRemoved':
-        setFiles((prev) => { const n = new Map(prev); n.delete(u.fileId); return n; });
-        setShares((prev) => {
-          const n = new Map(prev);
-          for (const [k, sh] of n) if (sh.fileId === u.fileId) n.delete(k);
-          return n;
-        });
-        break;
-      case 'viewAdded':
-        setViews((prev) => new Map(prev).set(u.name, { name: u.name, tags: u.tags, color: u.color }));
-        break;
-      case 'viewRemoved':
-        setViews((prev) => { const n = new Map(prev); n.delete(u.name); return n; });
-        break;
-      case 'shareAdded': {
-        const fm = filesRef.current.get(u.fileId);
-        if (fm) {
-          const sh: Share = { token: u.token, fileId: u.fileId, name: fm.name };
-          setShares((ps) => new Map(ps).set(u.token, sh));
-          setPendingShareFor((pending) => {
-            if (pending === u.fileId) {
-              setShareDialog(sh);
-              return null;
-            }
-            return pending;
-          });
-        }
-        break;
-      }
-      case 'shareRemoved':
-        setShares((prev) => { const n = new Map(prev); n.delete(u.token); return n; });
-        break;
-      case 'inboxAdded':
-      case 'inboxUpdated':
-        setInbox((prev) => new Map(prev).set(`${u.entry.owner}/${u.entry.fileId}`, u.entry));
-        break;
-      case 'inboxRemoved':
-        setInbox((prev) => { const n = new Map(prev); n.delete(`${u.owner}/${u.fileId}`); return n; });
-        break;
-      case 'trustedUpdated':
-        setTrusted(new Set(u.trusted));
-        setBlocked(new Set(u.blocked));
-        break;
-      case 'cacheUpdated':
-        setInbox((prev) => {
-          const k = `${u.owner}/${u.meta.id}`;
-          const ent = prev.get(k);
-          if (!ent) return prev;
-          return new Map(prev).set(k, { ...ent, cached: true });
-        });
-        break;
-      case 'cacheRemoved':
-        setInbox((prev) => {
-          const k = `${u.owner}/${u.fileId}`;
-          const ent = prev.get(k);
-          if (!ent) return prev;
-          return new Map(prev).set(k, { ...ent, cached: false });
-        });
-        break;
-      case 'canopyEntryAdded':
-        setCanopyEntries((prev) => new Map(prev).set(u.entry.id, u.entry));
-        break;
-      case 'canopyEntryRemoved':
-        setCanopyEntries((prev) => { const n = new Map(prev); n.delete(u.fileId); return n; });
-        break;
-      case 'canopyConfigUpdated':
-        setCanopyConfig(u.config);
-        break;
-      case 'canopyPeerUpdated':
-        setCanopyPeers((prev) => new Map(prev).set(u.listing.host, u.listing));
-        break;
-      case 'canopyPeerRemoved':
-        setCanopyPeers((prev) => { const n = new Map(prev); n.delete(u.host); return n; });
-        break;
-    }
-  }, []);
-
-  const uploadFiles = useCallback(async (list: FileList | File[]) => {
-    const files = Array.from(list);
-    if (files.length === 0) return;
-    isUploadingRef.current = true;
-    uploadCollectedRef.current = [];
-    setUploadBusy(true);
-    setUploadProgress({ done: 0, total: files.length });
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const data = await fileToBase64(f);
-        await poke({
-          upload: { name: f.name, 'file-mark': inferMark(f.name), data, tags: [] },
-        });
-        setUploadProgress({ done: i + 1, total: files.length });
-      }
-      await new Promise((r) => setTimeout(r, 400));
-      const collected = [...uploadCollectedRef.current];
-      if (collected.length > 0) setBulkTagIds(collected);
-      const fresh = await scryFiles();
-      setFiles(new Map(fresh.map((m) => [m.id, m])));
-    } catch (e) {
-      console.error('upload failed', e);
-      alert(`Upload failed: ${(e as Error).message ?? e}`);
-    } finally {
-      isUploadingRef.current = false;
-      uploadCollectedRef.current = [];
-      setUploadBusy(false);
-      setUploadProgress(null);
-    }
-  }, []);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -303,37 +76,14 @@ export default function App() {
       console.error('share poke failed', e);
       setPendingShareFor(null);
     });
-  }, [shares]);
+  }, [shares, setShareDialog, setPendingShareFor]);
 
-  const onDragEnter = (e: React.DragEvent) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
-    e.preventDefault();
-    dragCounter.current++;
-    setDragActive(true);
-  };
-  const onDragOver = (e: React.DragEvent) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
-    e.preventDefault();
-  };
-  const onDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = Math.max(0, dragCounter.current - 1);
-    if (dragCounter.current === 0) setDragActive(false);
-  };
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    setDragActive(false);
-    const f = e.dataTransfer?.files;
-    if (f && f.length > 0) uploadFiles(f);
-  };
-
-  const bulkTagFiles = bulkTagIds
-    ? bulkTagIds.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
+  const bulkTagFiles = upload.bulkTagIds
+    ? upload.bulkTagIds.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
     : [];
 
   const canopyPeerList = useMemo(
-    () => Array.from(canopyPeers.keys()).sort(),
+    () => Array.from(canopyPeers.keys()).sort((a, b) => a.localeCompare(b)),
     [canopyPeers]
   );
 
@@ -376,14 +126,14 @@ export default function App() {
     selection.kind === 'view' ? selection.name :
     selection.kind === 'tag' ? `#${selection.name}` : '';
 
+  const deleteFile = useCallback((id: string) => {
+    if (!confirm('Delete this file?')) return;
+    pokeSafe({ delete: { id } });
+    setActiveFileId((prev) => prev === id ? null : prev);
+  }, []);
+
   return (
-    <div
-      className="flex h-full relative"
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+    <div className="flex h-full relative" {...upload.dragHandlers}>
       <Sidebar
         views={Array.from(views.values())}
         tagCounts={tagCounts}
@@ -429,7 +179,7 @@ export default function App() {
           )}
           {selection.kind === 'canopy-browse' && <div className="flex-1" />}
           <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
-            <UploadZone busy={uploadBusy} progress={uploadProgress} onFiles={uploadFiles} />
+            <UploadZone busy={upload.busy} progress={upload.progress} onFiles={upload.upload} />
           </div>
         </header>
         <div className="flex-1 flex min-h-0">
@@ -500,11 +250,7 @@ export default function App() {
               onSelect={setActiveFileId}
               onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
               onShare={openShareFor}
-              onDelete={(id) => {
-                if (!confirm('Delete this file?')) return;
-                pokeSafe({ delete: { id } });
-                if (activeFileId === id) setActiveFileId(null);
-              }}
+              onDelete={deleteFile}
             />
           ) : (
             <FileGrid
@@ -513,11 +259,7 @@ export default function App() {
               onSelect={setActiveFileId}
               onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
               onShare={openShareFor}
-              onDelete={(id) => {
-                if (!confirm('Delete this file?')) return;
-                pokeSafe({ delete: { id } });
-                if (activeFileId === id) setActiveFileId(null);
-              }}
+              onDelete={deleteFile}
             />
           )}
           {activeFile && !isCanopySelection && (
@@ -542,7 +284,7 @@ export default function App() {
         </div>
       </main>
 
-      {dragActive && (
+      {upload.dragActive && (
         <div className="fixed inset-0 bg-accent/10 border-4 border-dashed border-accent pointer-events-none z-40 flex items-center justify-center">
           <div className="bg-surface rounded-lg shadow-lg px-6 py-4 text-accent font-medium">
             Drop files to upload
@@ -581,17 +323,17 @@ export default function App() {
           }}
         />
       )}
-      {bulkTagIds && bulkTagFiles.length > 0 && (
+      {upload.bulkTagIds && bulkTagFiles.length > 0 && (
         <BulkTagModal
           files={bulkTagFiles}
           allTags={uniqueTags(files)}
-          onClose={() => setBulkTagIds(null)}
+          onClose={() => upload.setBulkTagIds(null)}
           onApply={({ tags, makePublic }) => {
-            for (const id of bulkTagIds) {
+            for (const id of upload.bulkTagIds!) {
               if (tags.length > 0) pokeSafe({ 'add-tags': { id, tags } });
               if (makePublic) pokeSafe({ share: { id } });
             }
-            setBulkTagIds(null);
+            upload.setBulkTagIds(null);
           }}
         />
       )}
@@ -602,51 +344,5 @@ export default function App() {
 function uniqueTags(files: Map<string, FileMeta>): string[] {
   const s = new Set<string>();
   for (const f of files.values()) for (const t of f.tags) s.add(t);
-  return Array.from(s).sort();
-}
-
-function ToolbarControls({ search, onSearchChange, sortKey, onSortChange, viewMode, onViewModeChange, placeholder, tint }: {
-  search: string; onSearchChange: (v: string) => void;
-  sortKey: SortKey; onSortChange: (v: SortKey) => void;
-  viewMode: 'list' | 'grid'; onViewModeChange: (v: 'list' | 'grid') => void;
-  placeholder: string;
-  tint: 'canopy' | 'accent';
-}) {
-  const activeBg = tint === 'canopy' ? 'bg-canopy-soft' : 'bg-accent-soft';
-  const activeText = tint === 'canopy' ? 'text-canopy' : 'text-accent';
-  return (
-    <>
-      <input
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder={placeholder}
-        className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
-      />
-      <div className="ml-auto flex items-center gap-3">
-        <select
-          value={sortKey}
-          onChange={(e) => onSortChange(parseSortKey(e.target.value))}
-          className="text-xs border border-border rounded px-2 py-1 bg-surface"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="name-asc">Name A→Z</option>
-          <option value="name-desc">Name Z→A</option>
-          <option value="largest">Largest first</option>
-          <option value="smallest">Smallest first</option>
-          <option value="type">Type</option>
-        </select>
-        <div className="flex border border-border rounded overflow-hidden text-xs">
-          <button
-            onClick={() => onViewModeChange('list')}
-            className={`px-2 py-1 ${viewMode === 'list' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
-          >List</button>
-          <button
-            onClick={() => onViewModeChange('grid')}
-            className={`px-2 py-1 border-l border-border ${viewMode === 'grid' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
-          >Grid</button>
-        </div>
-      </div>
-    </>
-  );
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
 }

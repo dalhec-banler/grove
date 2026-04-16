@@ -103,6 +103,8 @@ export type Update =
 
 export type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
+export type ViewMode = 'list' | 'grid';
+
 export type Selection =
   | { kind: 'all' }
   | { kind: 'starred' }

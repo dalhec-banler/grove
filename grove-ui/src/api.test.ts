@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { inferMark, fileUrl, remoteFileUrl } from './format';
+import { inferMark } from './format';
+import { fileUrl, remoteFileUrl } from './urls';
 
 describe('inferMark', () => {
   it('returns extension as mark', () => {
@@ -13,8 +14,8 @@ describe('inferMark', () => {
     expect(inferMark('file.JPG')).toBe('jpg');
   });
 
-  it('uses filename itself when no dot separator', () => {
-    expect(inferMark('noext')).toBe('noext');
+  it('returns bin for files without extension', () => {
+    expect(inferMark('noext')).toBe('bin');
     expect(inferMark('')).toBe('bin');
   });
 });

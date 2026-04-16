@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
 import { addTag } from '../format';
+import Backdrop from './Backdrop';
 
 interface Props {
   file: FileMeta;
@@ -27,7 +28,7 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <Backdrop onClose={onClose}>
       <div className="bg-surface rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium">Publish to canopy</h2>
@@ -85,6 +86,6 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </Backdrop>
   );
 }

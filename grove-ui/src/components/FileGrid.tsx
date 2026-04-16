@@ -1,5 +1,7 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, fileUrl } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS } from '../format';
+import { fileUrl } from '../urls';
+import { GRID_STYLE } from '../styles';
 import FileIcon from './FileIcon';
 
 interface Props {
@@ -11,8 +13,8 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-export default function FileGrid(p: Props) {
-  if (p.files.length === 0) {
+export default function FileGrid({ files, activeId, onSelect, onToggleStar, onShare, onDelete }: Props) {
+  if (files.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-faint text-sm">
         No files here. Drop files to upload.
@@ -21,16 +23,16 @@ export default function FileGrid(p: Props) {
   }
   return (
     <div className="flex-1 overflow-y-auto p-4">
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-        {p.files.map((f) => (
+      <div className="grid gap-4" style={GRID_STYLE}>
+        {files.map((f) => (
           <Card
             key={f.id}
             file={f}
-            active={p.activeId === f.id}
-            onSelect={() => p.onSelect(f.id)}
-            onToggleStar={() => p.onToggleStar(f.id)}
-            onShare={() => p.onShare(f.id)}
-            onDelete={() => p.onDelete(f.id)}
+            active={activeId === f.id}
+            onSelect={() => onSelect(f.id)}
+            onToggleStar={() => onToggleStar(f.id)}
+            onShare={() => onShare(f.id)}
+            onDelete={() => onDelete(f.id)}
           />
         ))}
       </div>

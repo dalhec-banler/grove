@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
-import { addTag, fileUrl } from '../format';
+import { addTag } from '../format';
+import { fileUrl } from '../urls';
 import Thumb from './Thumb';
+import Backdrop from './Backdrop';
 
 interface Props {
   files: FileMeta[];
@@ -23,7 +25,7 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
   }
 
   return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <Backdrop onClose={onClose}>
       <div className="bg-surface rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-border">
           <h2 className="text-lg font-medium">Tag {files.length} upload{files.length > 1 ? 's' : ''}</h2>
@@ -94,6 +96,6 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
           </button>
         </div>
       </div>
-    </div>
+    </Backdrop>
   );
 }

@@ -16,7 +16,7 @@ interface Props {
   onUnsubscribeCanopy: (ship: string) => void;
 }
 
-function shortShip(ship: string): string {
+export function shortShip(ship: string): string {
   const s = ship.replace(/^~/, '');
   const parts = s.split('-');
   if (parts.length >= 8) return '~' + parts.slice(0, 2).join('-');

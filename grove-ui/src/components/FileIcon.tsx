@@ -8,9 +8,9 @@ const COLORS: Record<string, string> = {
   default: '#9CA3AF',
 };
 
-function category(mark: string): string {
+export function category(mark: string): string {
   const m = mark.toLowerCase();
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'tiff'].includes(m)) return 'image';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'tiff', 'avif'].includes(m)) return 'image';
   if (['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(m)) return 'video';
   if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(m)) return 'audio';
   if (m === 'pdf') return 'pdf';
