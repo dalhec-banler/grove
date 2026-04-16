@@ -2,6 +2,7 @@ import Urbit from '@urbit/http-api';
 import type {
   FileMeta, View, Share, Update, InboxEntry, Trust,
   CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
+  GroveAction,
 } from './types';
 
 declare global {
@@ -158,7 +159,7 @@ export function remoteFileUrl(owner: string, id: string): string {
   return `/grove-remote-file/~${o}/${id}`;
 }
 
-export function poke(action: Record<string, unknown>): Promise<void> {
+export function poke(action: GroveAction): Promise<void> {
   return new Promise((resolve, reject) => {
     api.poke({
       app: 'grove',
@@ -170,7 +171,7 @@ export function poke(action: Record<string, unknown>): Promise<void> {
   });
 }
 
-export function pokeSafe(action: Record<string, unknown>): void {
+export function pokeSafe(action: GroveAction): void {
   poke(action).catch((e) => {
     console.error('poke failed', action, e);
     alert(`Action failed: ${(e as Error).message}`);

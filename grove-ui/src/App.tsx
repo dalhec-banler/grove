@@ -3,7 +3,7 @@ import type {
   FileMeta, View, Share, Selection, Update, InboxEntry,
   CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo, SortKey,
 } from './types';
-import {
+import api, {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
   scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
   poke, pokeSafe, subscribeUpdates, fileToBase64, inferMark,
@@ -85,10 +85,13 @@ export default function App() {
   }, [refreshAll]);
 
   useEffect(() => {
-    const sub = subscribeUpdates(handleUpdate, () => {
+    let subId: number | undefined;
+    subscribeUpdates(handleUpdate, () => {
       refreshAll().catch((e) => console.error('reconnect refresh failed', e));
-    });
-    return () => { sub.then(() => {}); };
+    }).then((id) => { subId = id; });
+    return () => {
+      if (subId !== undefined) api.unsubscribe(subId);
+    };
   }, [refreshAll]);
 
   const handleUpdate = useCallback((u: Update) => {
@@ -132,21 +135,18 @@ export default function App() {
         setViews((prev) => { const n = new Map(prev); n.delete(u.name); return n; });
         break;
       case 'shareAdded': {
-        setFiles((prev) => {
-          const fm = prev.get(u.fileId);
-          if (fm) {
-            const sh: Share = { token: u.token, fileId: u.fileId, name: fm.name };
-            setShares((ps) => new Map(ps).set(u.token, sh));
-            setPendingShareFor((pending) => {
-              if (pending === u.fileId) {
-                setShareDialog(sh);
-                return null;
-              }
-              return pending;
-            });
-          }
-          return prev;
-        });
+        const fm = files.get(u.fileId);
+        if (fm) {
+          const sh: Share = { token: u.token, fileId: u.fileId, name: fm.name };
+          setShares((ps) => new Map(ps).set(u.token, sh));
+          setPendingShareFor((pending) => {
+            if (pending === u.fileId) {
+              setShareDialog(sh);
+              return null;
+            }
+            return pending;
+          });
+        }
         break;
       }
       case 'shareRemoved':
@@ -195,7 +195,7 @@ export default function App() {
         setCanopyPeers((prev) => { const n = new Map(prev); n.delete(u.host); return n; });
         break;
     }
-  }, []);
+  }, [files]);
 
   const uploadFiles = useCallback(async (list: FileList | File[]) => {
     const files = Array.from(list);
@@ -375,53 +375,18 @@ export default function App() {
               </span>
             ) : activeTitle}
           </h1>
-          {selection.kind !== 'canopy-browse' && (() => {
-            const isCanopy = selection.kind === 'canopy-mine' || selection.kind === 'canopy-peer';
-            const isInbox = selection.kind === 'inbox';
-            const curSearch = isCanopy ? canopySearch : isInbox ? inboxSearch : search;
-            const setCurSearch = isCanopy ? setCanopySearch : isInbox ? setInboxSearch : setSearch;
-            const curSort = isCanopy ? canopySort : isInbox ? inboxSort : fileSort;
-            const setCurSort = isCanopy ? setCanopySort : isInbox ? setInboxSort : setFileSort;
-            const curVM = isCanopy ? canopyViewMode : isInbox ? inboxViewMode : viewMode;
-            const setCurVM = isCanopy ? setCanopyViewMode : isInbox ? setInboxViewMode : setViewMode;
-            const activeBg = isCanopy ? 'bg-canopy-soft' : 'bg-accent-soft';
-            const activeText = isCanopy ? 'text-canopy' : 'text-accent';
-            return (
-              <>
-                <input
-                  value={curSearch}
-                  onChange={(e) => setCurSearch(e.target.value)}
-                  placeholder={isCanopy ? 'Search entries…' : isInbox ? 'Search shared…' : 'Search files & tags…'}
-                  className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
-                />
-                <div className="ml-auto flex items-center gap-3">
-                  <select
-                    value={curSort}
-                    onChange={(e) => setCurSort(e.target.value as SortKey)}
-                    className="text-xs border border-border rounded px-2 py-1 bg-surface"
-                  >
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                    <option value="name-asc">Name A→Z</option>
-                    <option value="name-desc">Name Z→A</option>
-                    <option value="largest">Largest first</option>
-                    <option value="smallest">Smallest first</option>
-                    <option value="type">Type</option>
-                  </select>
-                  <div className="flex border border-border rounded overflow-hidden text-xs">
-                    <button
-                      onClick={() => setCurVM('list')}
-                      className={`px-2 py-1 ${curVM === 'list' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
-                    >List</button>
-                    <button
-                      onClick={() => setCurVM('grid')}
-                      className={`px-2 py-1 border-l border-border ${curVM === 'grid' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
-                    >Grid</button>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
+          {selection.kind !== 'canopy-browse' && (
+            <ToolbarControls
+              search={isCanopySelection ? canopySearch : selection.kind === 'inbox' ? inboxSearch : search}
+              onSearchChange={isCanopySelection ? setCanopySearch : selection.kind === 'inbox' ? setInboxSearch : setSearch}
+              sortKey={isCanopySelection ? canopySort : selection.kind === 'inbox' ? inboxSort : fileSort}
+              onSortChange={isCanopySelection ? setCanopySort : selection.kind === 'inbox' ? setInboxSort : setFileSort}
+              viewMode={isCanopySelection ? canopyViewMode : selection.kind === 'inbox' ? inboxViewMode : viewMode}
+              onViewModeChange={isCanopySelection ? setCanopyViewMode : selection.kind === 'inbox' ? setInboxViewMode : setViewMode}
+              placeholder={isCanopySelection ? 'Search entries…' : selection.kind === 'inbox' ? 'Search shared…' : 'Search files & tags…'}
+              tint={isCanopySelection ? 'canopy' : 'accent'}
+            />
+          )}
           {selection.kind === 'canopy-browse' && <div className="flex-1" />}
           <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
             <UploadZone busy={uploadBusy} progress={uploadProgress} onFiles={uploadFiles} />
@@ -598,4 +563,50 @@ function uniqueTags(files: Map<string, FileMeta>): string[] {
   const s = new Set<string>();
   for (const f of files.values()) for (const t of f.tags) s.add(t);
   return Array.from(s).sort();
+}
+
+function ToolbarControls({ search, onSearchChange, sortKey, onSortChange, viewMode, onViewModeChange, placeholder, tint }: {
+  search: string; onSearchChange: (v: string) => void;
+  sortKey: SortKey; onSortChange: (v: SortKey) => void;
+  viewMode: 'list' | 'grid'; onViewModeChange: (v: 'list' | 'grid') => void;
+  placeholder: string;
+  tint: 'canopy' | 'accent';
+}) {
+  const activeBg = tint === 'canopy' ? 'bg-canopy-soft' : 'bg-accent-soft';
+  const activeText = tint === 'canopy' ? 'text-canopy' : 'text-accent';
+  return (
+    <>
+      <input
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder={placeholder}
+        className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
+      />
+      <div className="ml-auto flex items-center gap-3">
+        <select
+          value={sortKey}
+          onChange={(e) => onSortChange(e.target.value as SortKey)}
+          className="text-xs border border-border rounded px-2 py-1 bg-surface"
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="name-asc">Name A→Z</option>
+          <option value="name-desc">Name Z→A</option>
+          <option value="largest">Largest first</option>
+          <option value="smallest">Smallest first</option>
+          <option value="type">Type</option>
+        </select>
+        <div className="flex border border-border rounded overflow-hidden text-xs">
+          <button
+            onClick={() => onViewModeChange('list')}
+            className={`px-2 py-1 ${viewMode === 'list' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
+          >List</button>
+          <button
+            onClick={() => onViewModeChange('grid')}
+            className={`px-2 py-1 border-l border-border ${viewMode === 'grid' ? `${activeBg} ${activeText}` : 'text-muted hover:bg-bg'}`}
+          >Grid</button>
+        </div>
+      </div>
+    </>
+  );
 }

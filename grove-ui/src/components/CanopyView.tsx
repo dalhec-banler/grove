@@ -45,6 +45,12 @@ function facets(entries: CanopyEntry[]): { tags: Array<[string, number]>; types:
   };
 }
 
+function toggleSetItem<T>(set: Set<T>, item: T): Set<T> {
+  const n = new Set(set);
+  n.has(item) ? n.delete(item) : n.add(item);
+  return n;
+}
+
 function FacetChips({
   tagFacets, typeFacets, activeTags, activeTypes, onToggleTag, onToggleType, onClear,
 }: {
@@ -151,7 +157,7 @@ export default function CanopyView(p: MineProps | BrowseProps | PeerProps) {
 function MineView(p: MineProps) {
   const [nameDraft, setNameDraft] = useState(p.config.name);
   const [friendDraft, setFriendDraft] = useState('');
-  const [friendErr, setFriendErr] = useState<string | null>(null);
+  const [friendError, setFriendErr] = useState<string | null>(null);
 
   useEffect(() => { setNameDraft(p.config.name); }, [p.config.name]);
 
@@ -231,7 +237,7 @@ function MineView(p: MineProps) {
                 />
                 <button onClick={addFriend} className="text-xs px-3 py-1 rounded bg-canopy text-white">Add</button>
               </div>
-              {friendErr && <div className="text-xs text-red-600 mt-1">{friendErr}</div>}
+              {friendError && <div className="text-xs text-red-600 mt-1">{friendError}</div>}
             </div>
           )}
           {p.config.mode === 'group' && (
@@ -284,9 +290,6 @@ function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
     [entries, activeTags, activeTypes, search, sortKey]
   );
 
-  function toggleTag(t: string) { const n = new Set(activeTags); n.has(t) ? n.delete(t) : n.add(t); setActiveTags(n); }
-  function toggleType(t: string) { const n = new Set(activeTypes); n.has(t) ? n.delete(t) : n.add(t); setActiveTypes(n); }
-
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-medium">Published files ({visible.length}{visible.length !== entries.length && ` of ${entries.length}`})</h2>
@@ -299,7 +302,8 @@ function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
           <FacetChips
             tagFacets={tagFacets} typeFacets={typeFacets}
             activeTags={activeTags} activeTypes={activeTypes}
-            onToggleTag={toggleTag} onToggleType={toggleType}
+            onToggleTag={(t) => setActiveTags(toggleSetItem(activeTags, t))}
+            onToggleType={(t) => setActiveTypes(toggleSetItem(activeTypes, t))}
             onClear={() => { setActiveTags(new Set()); setActiveTypes(new Set()); }}
           />
           {visible.length === 0 ? (
@@ -380,20 +384,22 @@ function MineCard({ entry, onUnpublish }: { entry: CanopyEntry; onUnpublish: () 
 
 function BrowseView(p: BrowseProps) {
   const [peerDraft, setPeerDraft] = useState('');
-  const [peerErr, setPeerErr] = useState<string | null>(null);
+  const [peerError, setPeerErr] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [hits, setHits] = useState<CanopySearchHit[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchErr] = useState<string | null>(null);
 
   useEffect(() => {
     const q = searchTerm.trim();
-    if (!q) { setHits([]); return; }
+    if (!q) { setHits([]); setSearchErr(null); return; }
     let cancelled = false;
     setSearching(true);
+    setSearchErr(null);
     const h = setTimeout(() => {
       scryCanopySearch(q)
         .then((r) => { if (!cancelled) setHits(r); })
-        .catch((e) => { if (!cancelled) { console.error('search', e); setHits([]); } })
+        .catch((e) => { if (!cancelled) { console.error('search', e); setSearchErr('Search failed — try again.'); } })
         .finally(() => { if (!cancelled) setSearching(false); });
     }, 250);
     return () => { cancelled = true; clearTimeout(h); };
@@ -424,7 +430,7 @@ function BrowseView(p: BrowseProps) {
           />
           <button onClick={subscribe} className="text-xs px-3 py-1 rounded bg-canopy text-white">Subscribe</button>
         </div>
-        {peerErr && <div className="text-xs text-red-600 mt-1">{peerErr}</div>}
+        {peerError && <div className="text-xs text-red-600 mt-1">{peerError}</div>}
       </section>
 
       <section>
@@ -436,7 +442,8 @@ function BrowseView(p: BrowseProps) {
           className="w-full border border-border rounded px-2 py-1.5 text-sm mb-3"
         />
         {searching && <div className="text-xs text-faint">Searching…</div>}
-        {!searching && searchTerm.trim() && hits.length === 0 && (
+        {searchError && <div className="text-xs text-red-600">{searchError}</div>}
+        {!searching && !searchError && searchTerm.trim() && hits.length === 0 && (
           <div className="text-xs text-faint">No results across {p.subscribed.size} subscription(s).</div>
         )}
         {!searchTerm.trim() && (
@@ -478,9 +485,6 @@ function PeerView(p: PeerProps) {
     [baseEntries, activeTags, activeTypes, p.search, p.sortKey]
   );
 
-  function toggleTag(t: string) { const n = new Set(activeTags); n.has(t) ? n.delete(t) : n.add(t); setActiveTags(n); }
-  function toggleType(t: string) { const n = new Set(activeTypes); n.has(t) ? n.delete(t) : n.add(t); setActiveTypes(n); }
-
   if (!p.listing) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
@@ -510,7 +514,8 @@ function PeerView(p: PeerProps) {
       <FacetChips
         tagFacets={tagFacets} typeFacets={typeFacets}
         activeTags={activeTags} activeTypes={activeTypes}
-        onToggleTag={toggleTag} onToggleType={toggleType}
+        onToggleTag={(t) => setActiveTags(toggleSetItem(activeTags, t))}
+        onToggleType={(t) => setActiveTypes(toggleSetItem(activeTypes, t))}
         onClear={() => { setActiveTags(new Set()); setActiveTypes(new Set()); }}
       />
       {entries.length === 0 ? (

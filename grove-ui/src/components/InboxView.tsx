@@ -316,7 +316,7 @@ function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }:
   const [draft, setDraft] = useState('');
   const [mode, setMode] = useState<'trust' | 'block'>('trust');
 
-  function add() {
+  function addShip() {
     const norm = normalizeShip(draft);
     if (!norm) return;
     if (mode === 'trust') onTrust(norm);
@@ -358,11 +358,11 @@ function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }:
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addShip(); } }}
           placeholder="~sampel-palnet"
           className="flex-1 border border-border rounded px-2 py-1 text-sm font-mono"
         />
-        <button onClick={add} className="text-xs px-2 py-1 rounded bg-accent text-white">Add</button>
+        <button onClick={addShip} className="text-xs px-2 py-1 rounded bg-accent text-white">Add</button>
       </div>
     </div>
   );

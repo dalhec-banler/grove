@@ -112,3 +112,35 @@ export type Selection =
   | { kind: 'canopy-mine' }
   | { kind: 'canopy-browse' }
   | { kind: 'canopy-peer'; ship: string };
+
+export type GroveAction =
+  | { upload: { name: string; 'file-mark': string; data: string; tags: string[] } }
+  | { rename: { id: FileId; name: string } }
+  | { delete: { id: FileId } }
+  | { 'toggle-star': { id: FileId } }
+  | { 'add-tags': { id: FileId; tags: string[] } }
+  | { 'remove-tags': { id: FileId; tags: string[] } }
+  | { 'set-description': { id: FileId; description: string } }
+  | { share: { id: FileId } }
+  | { unshare: { token: ShareToken } }
+  | { 'set-allowed': { id: FileId; ships: string[]; notify: boolean } }
+  | { mkview: { name: string; tags: string[]; color: string } }
+  | { rmview: { name: string } }
+  | { 'accept-offer': { owner: string; id: FileId } }
+  | { 'decline-offer': { owner: string; id: FileId } }
+  | { 'trust-ship': { who: string } }
+  | { 'untrust-ship': { who: string } }
+  | { 'block-ship': { who: string } }
+  | { 'unblock-ship': { who: string } }
+  | { fetch: { owner: string; id: FileId } }
+  | { plant: { owner: string; id: FileId } }
+  | { 'drop-cache': { owner: string; id: FileId } }
+  | { publish: { id: FileId; 'display-name': string; tags: string[]; description: string } }
+  | { unpublish: { id: FileId } }
+  | { 'set-canopy-mode': { mode: CanopyMode } }
+  | { 'set-canopy-name': { name: string } }
+  | { 'add-friend': { who: string } }
+  | { 'remove-friend': { who: string } }
+  | { 'set-canopy-group': { flag: GroupFlag | null } }
+  | { 'subscribe-to': { who: string } }
+  | { 'unsubscribe-from': { who: string } };
