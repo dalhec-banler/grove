@@ -101,6 +101,8 @@ export type Update =
   | { type: 'canopyPeerUpdated'; listing: CanopyListing }
   | { type: 'canopyPeerRemoved'; host: string };
 
+export type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
+
 export type Selection =
   | { kind: 'all' }
   | { kind: 'starred' }

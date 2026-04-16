@@ -21,6 +21,9 @@ grove/app/grove/
 .vere.lock
 *.urbit/
 
+# Desloppify local state
+.desloppify/
+
 # OS
 .DS_Store
 Thumbs.db

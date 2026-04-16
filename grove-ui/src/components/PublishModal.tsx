@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
+import { addTag } from '../format';
 
 interface Props {
   file: FileMeta;
@@ -13,10 +14,10 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
   const [tagDraft, setTagDraft] = useState('');
   const [tags, setTags] = useState<string[]>(file.tags);
 
-  function addTag() {
-    const t = tagDraft.trim().toLowerCase();
-    if (!t || tags.includes(t)) return;
-    setTags([...tags, t]);
+  function handleAddTag() {
+    const updated = addTag(tags, tagDraft);
+    if (!updated) return;
+    setTags(updated);
     setTagDraft('');
   }
 
@@ -26,7 +27,7 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-surface rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium">Publish to canopy</h2>
@@ -66,7 +67,7 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
             <input
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(); } }}
               placeholder="Add tag…"
               className="w-full border border-border rounded px-2 py-1 text-sm"
             />

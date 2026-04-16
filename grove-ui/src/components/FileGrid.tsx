@@ -1,7 +1,7 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS } from '../format';
 import FileIcon from './FileIcon';
-import { fileUrl, IMAGE_MARKS } from '../api';
+import { fileUrl } from '../api';
 
 interface Props {
   files: FileMeta[];

@@ -158,21 +158,40 @@ export function remoteFileUrl(owner: string, id: string): string {
   return `/grove-remote-file/~${o}/${id}`;
 }
 
-export async function poke(action: any): Promise<number> {
-  return api.poke({ app: 'grove', mark: 'grove-action', json: action });
+export function poke(action: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    api.poke({
+      app: 'grove',
+      mark: 'grove-action',
+      json: action,
+      onSuccess: () => resolve(),
+      onError: (err) => reject(new Error(typeof err === 'string' ? err : JSON.stringify(err))),
+    });
+  });
 }
 
-export function subscribeUpdates(onEvent: (u: Update) => void): Promise<number> {
-  return api.subscribe({
-    app: 'grove',
-    path: '/updates',
-    event: (data: any) => {
-      const norm = normalizeUpdate(data);
-      if (norm) onEvent(norm);
-    },
-    err: (e) => console.error('[sub err]', e),
-    quit: () => console.warn('[sub quit]'),
-  });
+export function subscribeUpdates(
+  onEvent: (u: Update) => void,
+  onQuit?: () => void,
+): Promise<number> {
+  const doSub = (): Promise<number> =>
+    api.subscribe({
+      app: 'grove',
+      path: '/updates',
+      event: (data: any) => {
+        const norm = normalizeUpdate(data);
+        if (norm) onEvent(norm);
+      },
+      err: (e) => console.error('[sub err]', e),
+      quit: () => {
+        console.warn('[sub quit] reconnecting in 2s…');
+        setTimeout(() => {
+          doSub().catch((e) => console.error('[sub reconnect]', e));
+          if (onQuit) onQuit();
+        }, 2000);
+      },
+    });
+  return doSub();
 }
 
 function normalizeUpdate(data: any): Update | null {
@@ -253,4 +272,3 @@ export function fileUrl(id: string): string {
   return `/grove-file/${id}`;
 }
 
-export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif']);

@@ -20,13 +20,18 @@ export function formatDate(da: string): string {
     : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function fileIcon(mark: string): string {
-  const m = mark.toLowerCase();
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(m)) return '🖼';
-  if (['mp4', 'mov', 'webm', 'mkv'].includes(m)) return '🎬';
-  if (['mp3', 'wav', 'ogg', 'flac'].includes(m)) return '🎵';
-  if (['pdf'].includes(m)) return '📕';
-  if (['txt', 'md', 'json', 'yaml', 'yml', 'toml', 'csv'].includes(m)) return '📄';
-  if (['zip', 'tar', 'gz', '7z'].includes(m)) return '🗜';
-  return '📦';
+export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif']);
+
+const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;
+
+export function normalizeShip(s: string): string | null {
+  const t = s.trim().toLowerCase().replace(/^~/, '');
+  if (!t || !SHIP_RX.test(`~${t}`)) return null;
+  return `~${t}`;
+}
+
+export function addTag(tags: string[], raw: string): string[] | null {
+  const t = raw.trim().toLowerCase();
+  if (!t || tags.includes(t)) return null;
+  return [...tags, t];
 }

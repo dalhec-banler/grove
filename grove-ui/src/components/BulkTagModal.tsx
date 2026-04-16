@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
+import { addTag } from '../format';
 import { fileUrl } from '../api';
 import Thumb from './Thumb';
 
@@ -15,10 +16,10 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
   const [tagInput, setTagInput] = useState('');
   const [makePublic, setMakePublic] = useState(false);
 
-  function addTag(t: string) {
-    const clean = t.trim().toLowerCase();
-    if (!clean || tags.includes(clean)) return;
-    setTags([...tags, clean]);
+  function handleAddTag(t: string) {
+    const updated = addTag(tags, t);
+    if (!updated) return;
+    setTags(updated);
     setTagInput('');
   }
 
@@ -56,7 +57,7 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput); }
+              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(tagInput); }
             }}
             placeholder="type a tag and press Enter"
             className="w-full border border-border rounded px-2 py-1.5 text-sm mb-2"
@@ -64,7 +65,7 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
           {allTags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1">
               {allTags.filter((t) => !tags.includes(t)).slice(0, 20).map((t) => (
-                <button key={t} onClick={() => addTag(t)} className="text-xs px-1.5 py-0.5 rounded border border-border text-muted hover:bg-bg">
+                <button key={t} onClick={() => handleAddTag(t)} className="text-xs px-1.5 py-0.5 rounded border border-border text-muted hover:bg-bg">
                   + {t}
                 </button>
               ))}

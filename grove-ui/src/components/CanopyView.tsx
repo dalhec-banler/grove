@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, InboxEntry, GroupInfo } from '../types';
-import { formatBytes, formatDate } from '../format';
+import type { CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, InboxEntry, GroupInfo, SortKey } from '../types';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
 import FileIcon from './FileIcon';
-import { fileUrl, remoteFileUrl, IMAGE_MARKS, scryCanopySearch, CanopySearchHit } from '../api';
+import { fileUrl, remoteFileUrl, scryCanopySearch, CanopySearchHit } from '../api';
 import Thumb from './Thumb';
-
-type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
 function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[] {
   const list = entries.slice();
@@ -100,19 +98,12 @@ function FacetChips({
   );
 }
 
-const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;
-function normalizeShip(s: string): string | null {
-  const t = s.trim().toLowerCase().replace(/^~/, '');
-  if (!t || !SHIP_RX.test(`~${t}`)) return null;
-  return `~${t}`;
-}
-
 interface MineProps {
   kind: 'mine';
   entries: CanopyEntry[];
   config: CanopyConfig;
   search: string;
-  sortKey: string;
+  sortKey: SortKey;
   viewMode: 'list' | 'grid';
   onUnpublish: (fileId: string) => void;
   onSetMode: (m: CanopyMode) => void;
@@ -135,7 +126,7 @@ interface PeerProps {
   listing: CanopyListing | null;
   cache: Map<string, InboxEntry>;
   search: string;
-  sortKey: string;
+  sortKey: SortKey;
   viewMode: 'list' | 'grid';
   onFetch: (host: string, id: string) => void;
   onPlant: (host: string, id: string) => void;
@@ -277,7 +268,7 @@ function MineView(p: MineProps) {
         </div>
       </section>
 
-      <MinePublished entries={p.entries} search={p.search} sortKey={p.sortKey as SortKey} viewMode={p.viewMode} onUnpublish={p.onUnpublish} />
+      <MinePublished entries={p.entries} search={p.search} sortKey={p.sortKey} viewMode={p.viewMode} onUnpublish={p.onUnpublish} />
     </div>
   );
 }
@@ -483,7 +474,7 @@ function PeerView(p: PeerProps) {
   const baseEntries = p.listing?.entries ?? [];
   const { tags: tagFacets, types: typeFacets } = useMemo(() => facets(baseEntries), [baseEntries]);
   const entries = useMemo(
-    () => sortEntries(filterEntries(baseEntries, activeTags, activeTypes, p.search), p.sortKey as SortKey),
+    () => sortEntries(filterEntries(baseEntries, activeTags, activeTypes, p.search), p.sortKey),
     [baseEntries, activeTags, activeTypes, p.search, p.sortKey]
   );
 

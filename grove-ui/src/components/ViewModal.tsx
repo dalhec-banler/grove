@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { View } from '../types';
+import { addTag } from '../format';
 
 interface Props {
   initial: View | null;
@@ -16,10 +17,10 @@ export default function ViewModal(p: Props) {
   const [tagInput, setTagInput] = useState('');
   const [color, setColor] = useState(p.initial?.color ?? PALETTE[0]);
 
-  function addTag(t: string) {
-    const clean = t.trim().toLowerCase();
-    if (!clean || tags.includes(clean)) return;
-    setTags([...tags, clean]);
+  function handleAddTag(t: string) {
+    const updated = addTag(tags, t);
+    if (!updated) return;
+    setTags(updated);
     setTagInput('');
   }
 
@@ -51,7 +52,7 @@ export default function ViewModal(p: Props) {
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput); }
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(tagInput); }
           }}
           placeholder="type a tag and press Enter"
           className="w-full border border-border rounded px-2 py-1.5 text-sm mb-2"
@@ -59,7 +60,7 @@ export default function ViewModal(p: Props) {
         {p.allTags.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {p.allTags.filter((t) => !tags.includes(t)).map((t) => (
-              <button key={t} onClick={() => addTag(t)} className="text-xs px-1.5 py-0.5 rounded border border-border text-muted hover:bg-bg">
+              <button key={t} onClick={() => handleAddTag(t)} className="text-xs px-1.5 py-0.5 rounded border border-border text-muted hover:bg-bg">
                 + {t}
               </button>
             ))}

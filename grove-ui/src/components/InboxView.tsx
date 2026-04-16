@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { InboxEntry } from '../types';
-import { formatBytes, formatDate } from '../format';
+import type { InboxEntry, SortKey } from '../types';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
 import FileIcon from './FileIcon';
-import { remoteFileUrl, IMAGE_MARKS } from '../api';
+import { remoteFileUrl } from '../api';
 import Thumb from './Thumb';
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
   trusted: Set<string>;
   blocked: Set<string>;
   search: string;
-  sortKey: string;
+  sortKey: SortKey;
   viewMode: 'list' | 'grid';
   onAccept: (e: InboxEntry) => void;
   onDecline: (e: InboxEntry) => void;
@@ -23,9 +23,7 @@ interface Props {
   onDropCache: (e: InboxEntry) => void;
 }
 
-type InboxSort = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
-
-function sortInbox(entries: InboxEntry[], key: InboxSort): InboxEntry[] {
+function sortInbox(entries: InboxEntry[], key: SortKey): InboxEntry[] {
   const list = entries.slice();
   switch (key) {
     case 'newest':    return list.sort((a, b) => b.offered.localeCompare(a.offered));
@@ -48,9 +46,8 @@ function filterInbox(entries: InboxEntry[], search: string): InboxEntry[] {
 }
 
 export default function InboxView(p: Props) {
-  const sk = p.sortKey as InboxSort;
-  const pending = sortInbox(filterInbox(p.entries.filter((e) => !e.accepted), p.search), sk);
-  const accepted = sortInbox(filterInbox(p.entries.filter((e) => e.accepted), p.search), sk);
+  const pending = sortInbox(filterInbox(p.entries.filter((e) => !e.accepted), p.search), p.sortKey);
+  const accepted = sortInbox(filterInbox(p.entries.filter((e) => e.accepted), p.search), p.sortKey);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-8">
@@ -242,11 +239,7 @@ function PendingCard({ entry, onAccept, onDecline }: {
   return (
     <div className="group relative rounded-lg border border-border bg-surface overflow-hidden">
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
-        {IMAGE_MARKS.has(entry.fileMark.toLowerCase()) ? (
-          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
-        ) : (
-          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
-        )}
+        <FileIcon mark={entry.fileMark} className="w-16 h-16" />
       </div>
       <div className="p-2">
         <div className="text-sm truncate" title={entry.name}>{entry.name}</div>
@@ -324,9 +317,8 @@ function TrustList({ trusted, blocked, onUntrust, onUnblock, onTrust, onBlock }:
   const [mode, setMode] = useState<'trust' | 'block'>('trust');
 
   function add() {
-    const t = draft.trim().toLowerCase();
-    if (!t) return;
-    const norm = t.startsWith('~') ? t : `~${t}`;
+    const norm = normalizeShip(draft);
+    if (!norm) return;
     if (mode === 'trust') onTrust(norm);
     else onBlock(norm);
     setDraft('');

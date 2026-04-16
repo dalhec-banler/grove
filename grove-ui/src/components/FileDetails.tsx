@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FileMeta, Share } from '../types';
-import { formatBytes, formatDate } from '../format';
+import { formatBytes, formatDate, normalizeShip, addTag } from '../format';
 import Thumb from './Thumb';
 import { fileUrl } from '../api';
 
@@ -20,13 +20,6 @@ interface Props {
   onUnpublish: () => void;
 }
 
-const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;
-function normalizeShip(s: string): string | null {
-  const t = s.trim().toLowerCase().replace(/^~/, '');
-  if (!t || !SHIP_RX.test(`~${t}`)) return null;
-  return `~${t}`;
-}
-
 export default function FileDetails(p: Props) {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(p.file.name);
@@ -35,10 +28,10 @@ export default function FileDetails(p: Props) {
   const [shipError, setShipError] = useState<string | null>(null);
   const [notify, setNotify] = useState(true);
 
-  function addTag() {
-    const t = tagDraft.trim().toLowerCase();
-    if (!t || p.file.tags.includes(t)) return;
-    p.onAddTags([t]);
+  function handleAddTag() {
+    const updated = addTag(p.file.tags, tagDraft);
+    if (!updated) return;
+    p.onAddTags([updated[updated.length - 1]]);
     setTagDraft('');
   }
 
@@ -116,7 +109,7 @@ export default function FileDetails(p: Props) {
         <input
           value={tagDraft}
           onChange={(e) => setTagDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(); } }}
           placeholder="Add tag…"
           className="w-full border border-border rounded px-2 py-1 text-sm"
         />

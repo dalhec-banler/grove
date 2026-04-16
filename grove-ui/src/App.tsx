@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   FileMeta, View, Share, Selection, Update, InboxEntry,
-  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
+  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo, SortKey,
 } from './types';
 import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
@@ -21,7 +21,6 @@ import CanopyView from './components/CanopyView';
 import PublishModal from './components/PublishModal';
 
 type ViewMode = 'list' | 'grid';
-type FileSort = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
 export default function App() {
   const [files, setFiles] = useState<Map<string, FileMeta>>(new Map());
@@ -46,11 +45,11 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('grove:viewMode') as ViewMode) || 'grid'
   );
-  const [fileSort, setFileSort] = useState<FileSort>('newest');
-  const [canopySort, setCanopySort] = useState<FileSort>('newest');
+  const [fileSort, setFileSort] = useState<SortKey>('newest');
+  const [canopySort, setCanopySort] = useState<SortKey>('newest');
   const [canopyViewMode, setCanopyViewMode] = useState<ViewMode>('list');
   const [canopySearch, setCanopySearch] = useState('');
-  const [inboxSort, setInboxSort] = useState<FileSort>('newest');
+  const [inboxSort, setInboxSort] = useState<SortKey>('newest');
   const [inboxViewMode, setInboxViewMode] = useState<ViewMode>('list');
   const [inboxSearch, setInboxSearch] = useState('');
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -63,30 +62,34 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem('grove:viewMode', viewMode); }, [viewMode]);
 
-  useEffect(() => {
-    (async () => {
-      const [f, v, s, ib, tr, ce, cc, cp, gr] = await Promise.all([
-        scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
-        scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
-      ]);
-      setFiles(new Map(f.map((m) => [m.id, m])));
-      setViews(new Map(v.map((w) => [w.name, w])));
-      setShares(new Map(s.map((sh) => [sh.token, sh])));
-      setInbox(new Map(ib.map((e) => [`${e.owner}/${e.fileId}`, e])));
-      setTrusted(new Set(tr.trusted));
-      setBlocked(new Set(tr.blocked));
-      setCanopyEntries(new Map(ce.map((e) => [e.id, e])));
-      setCanopyConfig(cc);
-      setCanopyPeers(new Map(cp.map((l) => [l.host, l])));
-      setAvailableGroups(gr);
-      setConnected(true);
-    })().catch((e) => console.error('initial load failed', e));
+  const refreshAll = useCallback(async () => {
+    const [f, v, s, ib, tr, ce, cc, cp, gr] = await Promise.all([
+      scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
+      scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
+    ]);
+    setFiles(new Map(f.map((m) => [m.id, m])));
+    setViews(new Map(v.map((w) => [w.name, w])));
+    setShares(new Map(s.map((sh) => [sh.token, sh])));
+    setInbox(new Map(ib.map((e) => [`${e.owner}/${e.fileId}`, e])));
+    setTrusted(new Set(tr.trusted));
+    setBlocked(new Set(tr.blocked));
+    setCanopyEntries(new Map(ce.map((e) => [e.id, e])));
+    setCanopyConfig(cc);
+    setCanopyPeers(new Map(cp.map((l) => [l.host, l])));
+    setAvailableGroups(gr);
+    setConnected(true);
   }, []);
 
   useEffect(() => {
-    const sub = subscribeUpdates(handleUpdate);
+    refreshAll().catch((e) => console.error('initial load failed', e));
+  }, [refreshAll]);
+
+  useEffect(() => {
+    const sub = subscribeUpdates(handleUpdate, () => {
+      refreshAll().catch((e) => console.error('reconnect refresh failed', e));
+    });
     return () => { sub.then(() => {}); };
-  }, []);
+  }, [refreshAll]);
 
   const handleUpdate = useCallback((u: Update) => {
     switch (u.type) {
@@ -213,6 +216,8 @@ export default function App() {
       await new Promise((r) => setTimeout(r, 400));
       const collected = [...uploadCollectedRef.current];
       if (collected.length > 0) setBulkTagIds(collected);
+      const fresh = await scryFiles();
+      setFiles(new Map(fresh.map((m) => [m.id, m])));
     } catch (e) {
       console.error('upload failed', e);
       alert(`Upload failed: ${(e as Error).message ?? e}`);
@@ -379,7 +384,6 @@ export default function App() {
             const setCurSort = isCanopy ? setCanopySort : isInbox ? setInboxSort : setFileSort;
             const curVM = isCanopy ? canopyViewMode : isInbox ? inboxViewMode : viewMode;
             const setCurVM = isCanopy ? setCanopyViewMode : isInbox ? setInboxViewMode : setViewMode;
-            const tint = isCanopy ? 'canopy' : 'accent';
             const activeBg = isCanopy ? 'bg-canopy-soft' : 'bg-accent-soft';
             const activeText = isCanopy ? 'text-canopy' : 'text-accent';
             return (
@@ -393,7 +397,7 @@ export default function App() {
                 <div className="ml-auto flex items-center gap-3">
                   <select
                     value={curSort}
-                    onChange={(e) => setCurSort(e.target.value as FileSort)}
+                    onChange={(e) => setCurSort(e.target.value as SortKey)}
                     className="text-xs border border-border rounded px-2 py-1 bg-surface"
                   >
                     <option value="newest">Newest first</option>

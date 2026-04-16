@@ -1,4 +1,4 @@
-import { IMAGE_MARKS } from '../api';
+import { IMAGE_MARKS } from '../format';
 import FileIcon from './FileIcon';
 
 const dims = {
