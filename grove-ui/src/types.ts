@@ -80,6 +80,11 @@ export interface CanopyListing {
   entries: CanopyEntry[];
 }
 
+export interface CanopySearchHit {
+  host: string;
+  entry: CanopyEntry;
+}
+
 export type Update =
   | { type: 'fileAdded'; fileId: FileId; name: string; fileMark: string; size: number; tags: string[]; created: string; modified: string; description: string; starred: boolean }
   | { type: 'fileUpdated'; fileId: FileId; name: string; fileMark: string; size: number; tags: string[]; created: string; modified: string; description: string; starred: boolean }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Selection, View } from '../types';
+import { shortShip } from '../format';
 
 interface Props {
   views: View[];
@@ -14,13 +15,6 @@ interface Props {
   shipName: string;
   canopyPeers: string[];
   onUnsubscribeCanopy: (ship: string) => void;
-}
-
-export function shortShip(ship: string): string {
-  const s = ship.replace(/^~/, '');
-  const parts = s.split('-');
-  if (parts.length >= 8) return '~' + parts.slice(0, 2).join('-');
-  return '~' + s;
 }
 
 export default function Sidebar({

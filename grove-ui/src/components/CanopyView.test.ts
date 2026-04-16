@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sortEntries, filterEntries, facets } from './CanopyView';
+import { sortEntries, filterEntries, facets } from '../canopy-utils';
 import type { CanopyEntry } from '../types';
 
 function mkEntry(overrides: Partial<CanopyEntry> & { id: string }): CanopyEntry {

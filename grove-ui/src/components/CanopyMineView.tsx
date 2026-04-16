@@ -1,0 +1,252 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { CanopyEntry, CanopyConfig, CanopyMode, GroupInfo, SortKey } from '../types';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { fileUrl } from '../urls';
+import { GRID_STYLE } from '../styles';
+import FileIcon from './FileIcon';
+import Thumb from './Thumb';
+import { sortEntries, filterEntries, facets, toggleSetItem, FacetChips } from '../canopy-utils';
+
+export interface MineProps {
+  kind: 'mine';
+  entries: CanopyEntry[];
+  config: CanopyConfig;
+  search: string;
+  sortKey: SortKey;
+  viewMode: 'list' | 'grid';
+  onUnpublish: (fileId: string) => void;
+  onSetMode: (m: CanopyMode) => void;
+  onSetName: (name: string) => void;
+  onAddFriend: (ship: string) => void;
+  onRemoveFriend: (ship: string) => void;
+  onSetGroup: (flag: { host: string; name: string } | null) => void;
+  groups: GroupInfo[];
+}
+
+export default function MineView(p: MineProps) {
+  const [nameDraft, setNameDraft] = useState(p.config.name);
+  const [friendDraft, setFriendDraft] = useState('');
+  const [friendError, setFriendError] = useState<string | null>(null);
+
+  useEffect(() => { setNameDraft(p.config.name); }, [p.config.name]);
+
+  function addFriend() {
+    const norm = normalizeShip(friendDraft);
+    if (!norm) { setFriendError('not a valid @p'); return; }
+    if (p.config.friends.includes(norm)) { setFriendError('already a friend'); return; }
+    setFriendError(null);
+    p.onAddFriend(norm);
+    setFriendDraft('');
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 space-y-8">
+      <section className="border border-border rounded-lg bg-surface p-4">
+        <h2 className="text-sm font-medium mb-3">Canopy settings</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-muted block mb-1">Catalog name</label>
+            <div className="flex gap-2">
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                placeholder="e.g. Austin's library"
+                className="flex-1 border border-border rounded px-2 py-1 text-sm"
+              />
+              <button
+                onClick={() => p.onSetName(nameDraft)}
+                disabled={nameDraft === p.config.name}
+                className="text-xs px-3 py-1 rounded bg-canopy text-white disabled:opacity-40"
+              >Save</button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted block mb-1">Visibility</label>
+            <div className="flex border border-border rounded overflow-hidden text-xs w-fit">
+              <button
+                onClick={() => p.onSetMode('open')}
+                className={`px-3 py-1 ${p.config.mode === 'open' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+              >Open · anyone</button>
+              <button
+                onClick={() => p.onSetMode('friends')}
+                className={`px-3 py-1 border-l border-border ${p.config.mode === 'friends' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+              >Friends only</button>
+              <button
+                onClick={() => p.onSetMode('group')}
+                className={`px-3 py-1 border-l border-border ${p.config.mode === 'group' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+              >Group</button>
+            </div>
+            <div className="text-xs text-faint mt-1">
+              {p.config.mode === 'open'
+                ? 'Anyone can subscribe and download published files.'
+                : p.config.mode === 'friends'
+                ? 'Only ships on your friends list can see and download.'
+                : 'Only members of the selected Tlon group can see and download.'}
+            </div>
+          </div>
+          {p.config.mode === 'friends' && (
+            <div>
+              <label className="text-xs text-muted block mb-1">Friends</label>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {p.config.friends.map((s) => (
+                  <span key={s} className="text-xs px-2 py-0.5 rounded bg-bg border border-border flex items-center gap-1 font-mono">
+                    {s}
+                    <button onClick={() => p.onRemoveFriend(s)} className="text-faint hover:text-red-600">×</button>
+                  </span>
+                ))}
+                {p.config.friends.length === 0 && <span className="text-xs text-faint">No friends yet</span>}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={friendDraft}
+                  onChange={(e) => { setFriendDraft(e.target.value); setFriendError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFriend(); } }}
+                  placeholder="~sampel-palnet"
+                  className="flex-1 border border-border rounded px-2 py-1 text-sm font-mono"
+                />
+                <button onClick={addFriend} className="text-xs px-3 py-1 rounded bg-canopy text-white">Add</button>
+              </div>
+              {friendError && <div className="text-xs text-red-600 mt-1">{friendError}</div>}
+            </div>
+          )}
+          {p.config.mode === 'group' && (
+            <div>
+              <label className="text-xs text-muted block mb-1">Select a group</label>
+              {p.groups.length === 0 ? (
+                <div className="text-xs text-faint">No groups found. Join a group in Tlon Messenger first.</div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {p.groups.map((g) => {
+                      const isSelected = p.config.groupFlag?.host === g.host && p.config.groupFlag?.name === g.name;
+                      return (
+                        <button
+                          key={`${g.host}/${g.name}`}
+                          onClick={() => p.onSetGroup(isSelected ? null : { host: g.host, name: g.name })}
+                          className={`text-xs px-3 py-1.5 rounded border ${isSelected ? 'bg-canopy-soft border-canopy text-canopy font-medium' : 'border-border text-muted hover:text-ink hover:border-ink/30'}`}
+                        >
+                          <div className="font-medium">{g.title || g.name}</div>
+                          <div className="text-[10px] opacity-70">{g.members} members</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {p.config.groupFlag && (
+                    <div className="text-xs text-faint">
+                      Linked to <span className="font-mono">{p.config.groupFlag.host}/{p.config.groupFlag.name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <MinePublished entries={p.entries} search={p.search} sortKey={p.sortKey} viewMode={p.viewMode} onUnpublish={p.onUnpublish} />
+    </div>
+  );
+}
+
+function MinePublished({ entries, search, sortKey, viewMode, onUnpublish }: {
+  entries: CanopyEntry[]; search: string; sortKey: SortKey; viewMode: 'list' | 'grid'; onUnpublish: (id: string) => void;
+}) {
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
+  const { tags: tagFacets, types: typeFacets } = useMemo(() => facets(entries), [entries]);
+  const visible = useMemo(
+    () => sortEntries(filterEntries(entries, activeTags, activeTypes, search), sortKey),
+    [entries, activeTags, activeTypes, search, sortKey]
+  );
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-medium">Published files ({visible.length}{visible.length !== entries.length && ` of ${entries.length}`})</h2>
+      {entries.length === 0 ? (
+        <div className="border border-dashed border-border rounded-lg p-6 text-center text-sm text-faint">
+          Nothing published yet. Open a file's details to publish it to your canopy.
+        </div>
+      ) : (
+        <>
+          <FacetChips
+            tagFacets={tagFacets} typeFacets={typeFacets}
+            activeTags={activeTags} activeTypes={activeTypes}
+            onToggleTag={(t) => setActiveTags(toggleSetItem(activeTags, t))}
+            onToggleType={(t) => setActiveTypes(toggleSetItem(activeTypes, t))}
+            onClear={() => { setActiveTags(new Set()); setActiveTypes(new Set()); }}
+          />
+          {visible.length === 0 ? (
+            <div className="text-xs text-faint">No entries match those filters.</div>
+          ) : viewMode === 'grid' ? (
+            <div className="grid gap-4" style={GRID_STYLE}>
+              {visible.map((e) => (
+                <MineCard key={e.id} entry={e} onUnpublish={() => onUnpublish(e.id)} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visible.map((e) => (
+                <MineRow key={e.id} entry={e} onUnpublish={() => onUnpublish(e.id)} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function MineRow({ entry, onUnpublish }: { entry: CanopyEntry; onUnpublish: () => void }) {
+  return (
+    <div className="border border-border rounded-lg p-3 bg-surface flex items-center gap-3">
+      <Thumb mark={entry.fileMark} src={fileUrl(entry.id)} size="md" />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">{entry.displayName}</div>
+        {entry.description && <div className="text-xs text-muted truncate">{entry.description}</div>}
+        <div className="text-xs text-faint">
+          {formatBytes(entry.size)} · published {formatDate(entry.published)}
+          {entry.tags.length > 0 && <> · {entry.tags.map((t) => `#${t}`).join(' ')}</>}
+        </div>
+      </div>
+      <button
+        onClick={() => { if (confirm('Unpublish from canopy?')) onUnpublish(); }}
+        className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-red-600"
+      >Unpublish</button>
+    </div>
+  );
+}
+
+function MineCard({ entry, onUnpublish }: { entry: CanopyEntry; onUnpublish: () => void }) {
+  return (
+    <div className="group relative rounded-lg border border-border bg-surface overflow-hidden">
+      <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
+        {IMAGE_MARKS.has(entry.fileMark.toLowerCase()) ? (
+          <img src={fileUrl(entry.id)} alt={entry.displayName} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <FileIcon mark={entry.fileMark} className="w-16 h-16" />
+        )}
+      </div>
+      <div className="p-2">
+        <div className="text-sm truncate" title={entry.displayName}>{entry.displayName}</div>
+        <div className="text-xs text-muted flex justify-between">
+          <span>{formatBytes(entry.size)}</span>
+          <span>{formatDate(entry.published)}</span>
+        </div>
+        {entry.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {entry.tags.slice(0, 2).map((t) => (
+              <span key={t} className="text-[10px] px-1 rounded bg-canopy-soft border border-canopy/20 text-canopy">{t}</span>
+            ))}
+            {entry.tags.length > 2 && <span className="text-[10px] text-faint">+{entry.tags.length - 2}</span>}
+          </div>
+        )}
+      </div>
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+        <button
+          onClick={() => { if (confirm('Unpublish from canopy?')) onUnpublish(); }}
+          className="text-xs px-1.5 py-0.5 rounded bg-black/60 text-white hover:bg-red-600"
+        >×</button>
+      </div>
+    </div>
+  );
+}

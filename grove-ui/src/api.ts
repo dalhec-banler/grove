@@ -2,7 +2,7 @@ import Urbit from '@urbit/http-api';
 import type {
   FileMeta, View, Share, Update, InboxEntry, Trust,
   CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
-  GroveAction,
+  GroveAction, CanopySearchHit,
 } from './types';
 
 declare global {
@@ -45,18 +45,18 @@ function fileFromJson(o: any): FileMeta {
 }
 
 export async function scryFiles(): Promise<FileMeta[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/files' });
-  return (raw ?? []).map(fileFromJson);
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/files' });
+  return (Array.isArray(raw) ? raw : []).map(fileFromJson);
 }
 
 export async function scryViews(): Promise<View[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/views' });
-  return (raw ?? []).map((v) => ({ name: v.name, tags: v.tags ?? [], color: v.color }));
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/views' });
+  return (Array.isArray(raw) ? raw : []).map((v: any) => ({ name: v.name, tags: v.tags ?? [], color: v.color }));
 }
 
 export async function scryShares(): Promise<Share[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/shares' });
-  return (raw ?? []).map((s) => ({ token: s.token, fileId: s['file-id'], name: s.name }));
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/shares' });
+  return (Array.isArray(raw) ? raw : []).map((s: any) => ({ token: s.token, fileId: s['file-id'], name: s.name }));
 }
 
 function entryFromJson(o: any): InboxEntry {
@@ -73,8 +73,8 @@ function entryFromJson(o: any): InboxEntry {
 }
 
 export async function scryInbox(): Promise<InboxEntry[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/inbox' });
-  return (raw ?? []).map(entryFromJson);
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/inbox' });
+  return (Array.isArray(raw) ? raw : []).map(entryFromJson);
 }
 
 export async function scryTrusted(): Promise<Trust> {
@@ -115,8 +115,8 @@ function canopyListingFromJson(o: any): CanopyListing {
 }
 
 export async function scryCanopyEntries(): Promise<CanopyEntry[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/canopy/entries' });
-  return (raw ?? []).map(canopyEntryFromJson);
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/entries' });
+  return (Array.isArray(raw) ? raw : []).map(canopyEntryFromJson);
 }
 
 export async function scryCanopyConfig(): Promise<CanopyConfig> {
@@ -125,8 +125,8 @@ export async function scryCanopyConfig(): Promise<CanopyConfig> {
 }
 
 export async function scryCanopyPeers(): Promise<CanopyListing[]> {
-  const raw = await getApi().scry<any[]>({ app: 'grove', path: '/canopy/peers' });
-  return (raw ?? []).map(canopyListingFromJson);
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/peers' });
+  return (Array.isArray(raw) ? raw : []).map(canopyListingFromJson);
 }
 
 export async function scryCanopyPeer(ship: string): Promise<CanopyListing | null> {
@@ -140,11 +140,6 @@ export async function scryCanopyPeer(ship: string): Promise<CanopyListing | null
     console.error(`[scryCanopyPeer] ${ship}:`, e);
     return null;
   }
-}
-
-export interface CanopySearchHit {
-  host: string;
-  entry: CanopyEntry;
 }
 
 export async function scryCanopySearch(term: string): Promise<CanopySearchHit[]> {
@@ -232,8 +227,20 @@ export function subscribeUpdates(
     id,
     cancel() {
       cancelled = true;
-      if (latestSubId !== undefined) getApi().unsubscribe(latestSubId);
+      if (latestSubId !== undefined) {
+        getApi().unsubscribe(latestSubId);
+      } else {
+        id.then((subId) => getApi().unsubscribe(subId)).catch(() => {});
+      }
     },
+  };
+}
+
+function normalizeFileMeta(type: 'fileAdded' | 'fileUpdated', data: any) {
+  return {
+    type, fileId: data.fileId, name: data.name, fileMark: data.fileMark,
+    size: data.size, tags: data.tags ?? [], created: data.created,
+    modified: data.modified, description: data.description ?? '', starred: !!data.starred,
   };
 }
 
@@ -242,18 +249,7 @@ export function normalizeUpdate(data: any): Update | null {
   switch (data.type) {
     case 'fileAdded':
     case 'fileUpdated':
-      return {
-        type: data.type,
-        fileId: data.fileId,
-        name: data.name,
-        fileMark: data.fileMark,
-        size: data.size,
-        tags: data.tags ?? [],
-        created: data.created,
-        modified: data.modified,
-        description: data.description ?? '',
-        starred: !!data.starred,
-      };
+      return normalizeFileMeta(data.type, data);
     case 'allowedUpdated':
       return { type: 'allowedUpdated', fileId: data.fileId, ships: data.ships ?? [] };
     case 'fileRemoved':
@@ -267,9 +263,8 @@ export function normalizeUpdate(data: any): Update | null {
     case 'shareRemoved':
       return { type: 'shareRemoved', token: data.token };
     case 'inboxAdded':
-      return { type: 'inboxAdded', entry: entryFromJson(data.entry) };
     case 'inboxUpdated':
-      return { type: 'inboxUpdated', entry: entryFromJson(data.entry) };
+      return { type: data.type, entry: entryFromJson(data.entry) };
     case 'inboxRemoved':
       return { type: 'inboxRemoved', owner: data.owner, fileId: data.fileId };
     case 'trustedUpdated':

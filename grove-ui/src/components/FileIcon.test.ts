@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { category } from './FileIcon';
+import { category } from '../marks';
 
 describe('category', () => {
   it('classifies image formats', () => {

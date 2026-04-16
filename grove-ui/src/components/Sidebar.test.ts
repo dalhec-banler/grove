@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shortShip } from './Sidebar';
+import { shortShip } from '../format';
 
 describe('shortShip', () => {
   it('returns galaxy unchanged', () => {

@@ -48,3 +48,10 @@ export function addTag(tags: string[], raw: string): string[] | null {
   if (!t || tags.includes(t)) return null;
   return [...tags, t];
 }
+
+export function shortShip(ship: string): string {
+  const s = ship.replace(/^~/, '');
+  const parts = s.split('-');
+  if (parts.length >= 8) return '~' + parts.slice(0, 2).join('-');
+  return '~' + s;
+}
