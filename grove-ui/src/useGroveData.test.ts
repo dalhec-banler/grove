@@ -19,7 +19,7 @@ vi.mock('./api', () => ({
   scryCanopyConfig: vi.fn(() => Promise.resolve({ mode: 'open', name: '', friends: [], groupFlag: null })),
   scryCanopyPeers: vi.fn(() => Promise.resolve([])),
   scryGroups: vi.fn(() => Promise.resolve([])),
-  subscribeUpdates: (...args: any[]) => mockSubscribe(...args),
+  subscribeUpdates: (...args: [any, any?]) => mockSubscribe(...args),
 }));
 
 function setup() {

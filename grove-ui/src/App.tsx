@@ -25,7 +25,7 @@ export default function App() {
   const {
     files, setFiles, views, shares, inbox, trusted, blocked,
     canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, availableGroups,
-    connected, setPendingShareFor, shareDialog, setShareDialog,
+    connected, loadError, setPendingShareFor, shareDialog, setShareDialog,
   } = useGroveData(isUploadingRef, uploadCollectedRef);
 
   const upload = useUpload(setFiles, isUploadingRef, uploadCollectedRef);
@@ -165,6 +165,9 @@ export default function App() {
         }}
       />
       <main className="flex-1 flex flex-col min-w-0">
+        {loadError && (
+          <div className="bg-red-600 text-white text-sm px-4 py-2 text-center">{loadError}</div>
+        )}
         <header className="h-14 border-b border-border flex items-center px-6 gap-4 bg-surface">
           <h1 className="text-lg font-medium min-w-0 truncate">
             {selection.kind === 'view' ? (
