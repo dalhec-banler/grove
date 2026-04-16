@@ -1,6 +1,5 @@
 import type { FileMeta } from '../types';
-import { formatBytes, formatDate } from '../format';
-import { fileUrl } from '../api';
+import { formatBytes, formatDate, fileUrl } from '../format';
 import Thumb from './Thumb';
 
 interface Props {

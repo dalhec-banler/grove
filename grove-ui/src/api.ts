@@ -154,11 +154,6 @@ export async function scryGroups(): Promise<GroupInfo[]> {
   }
 }
 
-export function remoteFileUrl(owner: string, id: string): string {
-  const o = owner.startsWith('~') ? owner.slice(1) : owner;
-  return `/grove-remote-file/~${o}/${id}`;
-}
-
 export function poke(action: GroveAction): Promise<void> {
   return new Promise((resolve, reject) => {
     api.poke({
@@ -265,18 +260,8 @@ export function fileToBase64(file: File): Promise<string> {
       const comma = s.indexOf(',');
       resolve(comma >= 0 ? s.slice(comma + 1) : s);
     };
-    r.onerror = () => reject(r.error);
+    r.onerror = () => reject(new Error(r.error?.message ?? 'FileReader error'));
     r.readAsDataURL(file);
   });
-}
-
-export function inferMark(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  if (!ext) return 'bin';
-  return ext;
-}
-
-export function fileUrl(id: string): string {
-  return `/grove-file/${id}`;
 }
 

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { FileMeta, Share } from '../types';
-import { formatBytes, formatDate, normalizeShip, addTag } from '../format';
+import { formatBytes, formatDate, normalizeShip, addTag, fileUrl } from '../format';
 import Thumb from './Thumb';
-import { fileUrl } from '../api';
 
 interface Props {
   file: FileMeta;

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { FileMeta } from '../types';
-import { addTag } from '../format';
-import { fileUrl } from '../api';
+import { addTag, fileUrl } from '../format';
 import Thumb from './Thumb';
 
 interface Props {

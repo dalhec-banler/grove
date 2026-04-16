@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { inferMark, fileUrl, remoteFileUrl } from './api';
+import { inferMark, fileUrl, remoteFileUrl } from './format';
 
 describe('inferMark', () => {
   it('returns extension as mark', () => {

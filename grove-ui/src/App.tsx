@@ -6,8 +6,9 @@ import type {
 import api, {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
   scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
-  poke, pokeSafe, subscribeUpdates, fileToBase64, inferMark,
+  poke, pokeSafe, subscribeUpdates, fileToBase64,
 } from './api';
+import { inferMark } from './format';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
 import FileGrid from './components/FileGrid';
@@ -57,8 +58,10 @@ export default function App() {
   const [bulkTagIds, setBulkTagIds] = useState<string[] | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const dragCounter = useRef(0);
-  const uploadTrackingRef = useRef<Set<string> | null>(null);
+  const isUploadingRef = useRef(false);
   const uploadCollectedRef = useRef<string[]>([]);
+  const filesRef = useRef(files);
+  filesRef.current = files;
 
   useEffect(() => { localStorage.setItem('grove:viewMode', viewMode); }, [viewMode]);
 
@@ -108,7 +111,7 @@ export default function App() {
           };
           return new Map(prev).set(meta.id, meta);
         });
-        if (u.type === 'fileAdded' && uploadTrackingRef.current) {
+        if (u.type === 'fileAdded' && isUploadingRef.current) {
           uploadCollectedRef.current.push(u.fileId);
         }
         break;
@@ -135,7 +138,7 @@ export default function App() {
         setViews((prev) => { const n = new Map(prev); n.delete(u.name); return n; });
         break;
       case 'shareAdded': {
-        const fm = files.get(u.fileId);
+        const fm = filesRef.current.get(u.fileId);
         if (fm) {
           const sh: Share = { token: u.token, fileId: u.fileId, name: fm.name };
           setShares((ps) => new Map(ps).set(u.token, sh));
@@ -195,12 +198,12 @@ export default function App() {
         setCanopyPeers((prev) => { const n = new Map(prev); n.delete(u.host); return n; });
         break;
     }
-  }, [files]);
+  }, []);
 
   const uploadFiles = useCallback(async (list: FileList | File[]) => {
     const files = Array.from(list);
     if (files.length === 0) return;
-    uploadTrackingRef.current = new Set();
+    isUploadingRef.current = true;
     uploadCollectedRef.current = [];
     setUploadBusy(true);
     setUploadProgress({ done: 0, total: files.length });
@@ -222,7 +225,7 @@ export default function App() {
       console.error('upload failed', e);
       alert(`Upload failed: ${(e as Error).message ?? e}`);
     } finally {
-      uploadTrackingRef.current = null;
+      isUploadingRef.current = false;
       uploadCollectedRef.current = [];
       setUploadBusy(false);
       setUploadProgress(null);

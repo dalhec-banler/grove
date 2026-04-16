@@ -22,6 +22,21 @@ export function formatDate(da: string): string {
 
 export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif']);
 
+export function inferMark(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (!ext) return 'bin';
+  return ext;
+}
+
+export function fileUrl(id: string): string {
+  return `/grove-file/${id}`;
+}
+
+export function remoteFileUrl(owner: string, id: string): string {
+  const o = owner.startsWith('~') ? owner.slice(1) : owner;
+  return `/grove-remote-file/~${o}/${id}`;
+}
+
 const SHIP_RX = /^~?[a-z]{3,}(-[a-z]{3,})*$/;
 
 export function normalizeShip(s: string): string | null {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { InboxEntry, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip, remoteFileUrl } from '../format';
 import FileIcon from './FileIcon';
-import { remoteFileUrl } from '../api';
 import Thumb from './Thumb';
 
 interface Props {

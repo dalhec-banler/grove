@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, InboxEntry, GroupInfo, SortKey } from '../types';
-import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip } from '../format';
+import { formatBytes, formatDate, IMAGE_MARKS, normalizeShip, fileUrl, remoteFileUrl } from '../format';
 import FileIcon from './FileIcon';
-import { fileUrl, remoteFileUrl, scryCanopySearch, CanopySearchHit } from '../api';
+import { scryCanopySearch, CanopySearchHit } from '../api';
 import Thumb from './Thumb';
 
 function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[] {
@@ -157,15 +157,15 @@ export default function CanopyView(p: MineProps | BrowseProps | PeerProps) {
 function MineView(p: MineProps) {
   const [nameDraft, setNameDraft] = useState(p.config.name);
   const [friendDraft, setFriendDraft] = useState('');
-  const [friendError, setFriendErr] = useState<string | null>(null);
+  const [friendError, setFriendError] = useState<string | null>(null);
 
   useEffect(() => { setNameDraft(p.config.name); }, [p.config.name]);
 
   function addFriend() {
     const norm = normalizeShip(friendDraft);
-    if (!norm) { setFriendErr('not a valid @p'); return; }
-    if (p.config.friends.includes(norm)) { setFriendErr('already a friend'); return; }
-    setFriendErr(null);
+    if (!norm) { setFriendError('not a valid @p'); return; }
+    if (p.config.friends.includes(norm)) { setFriendError('already a friend'); return; }
+    setFriendError(null);
     p.onAddFriend(norm);
     setFriendDraft('');
   }
@@ -230,7 +230,7 @@ function MineView(p: MineProps) {
               <div className="flex gap-2">
                 <input
                   value={friendDraft}
-                  onChange={(e) => { setFriendDraft(e.target.value); setFriendErr(null); }}
+                  onChange={(e) => { setFriendDraft(e.target.value); setFriendError(null); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFriend(); } }}
                   placeholder="~sampel-palnet"
                   className="flex-1 border border-border rounded px-2 py-1 text-sm font-mono"
