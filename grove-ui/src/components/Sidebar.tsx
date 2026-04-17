@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Selection, View } from '../types';
+import { isGroveDrag, getDragFileIds } from '../dnd';
 import { shortShip } from '../format';
 
 interface Props {
@@ -15,11 +16,14 @@ interface Props {
   shipName: string;
   canopyPeers: string[];
   onUnsubscribeCanopy: (ship: string) => void;
+  onDropOnView: (viewName: string, fileIds: string[]) => void;
+  onDropOnCanopy: (fileIds: string[]) => void;
 }
 
 export default function Sidebar({
   views, tagCounts, selection, onSelect, onNewView, onEditView, onDeleteView,
   counts, connected, shipName, canopyPeers, onUnsubscribeCanopy,
+  onDropOnView, onDropOnCanopy,
 }: Props) {
   const [viewsOpen, setViewsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
@@ -88,6 +92,7 @@ export default function Sidebar({
                   onClick={() => onSelect({ kind: 'view', name: v.name })}
                   onEdit={() => onEditView(v)}
                   onDelete={() => { if (confirm(`Delete view "${v.name}"?`)) onDeleteView(v); }}
+                  onDrop={(ids) => onDropOnView(v.name, ids)}
                 />
               ))}
             </div>
@@ -143,6 +148,7 @@ export default function Sidebar({
               active={selection.kind === 'canopy-mine'}
               onClick={() => onSelect({ kind: 'canopy-mine' })}
               tint="canopy"
+              onFileDrop={onDropOnCanopy}
             />
             <button
               onClick={() => onSelect({ kind: 'canopy-browse' })}
@@ -188,14 +194,39 @@ function SectionHeader({ label, open, onToggle, onAdd, addTitle, small }: { labe
   );
 }
 
-function SidebarItem({ label, count, active, onClick, tint }: { label: string; count: number; active: boolean; onClick: () => void; tint?: 'accent' | 'canopy' }) {
+function SidebarItem({ label, count, active, onClick, tint, onFileDrop }: {
+  label: string; count: number; active: boolean; onClick: () => void;
+  tint?: 'accent' | 'canopy'; onFileDrop?: (ids: string[]) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
   const c = tint ?? 'accent';
-  const cls = active
+
+  const cls = dragOver
+    ? c === 'canopy' ? 'bg-canopy-soft ring-2 ring-canopy text-canopy font-medium' : 'bg-accent-soft ring-2 ring-accent text-accent font-medium'
+    : active
     ? c === 'canopy' ? 'bg-canopy-soft text-canopy font-medium' : 'bg-accent-soft text-accent font-medium'
     : 'text-ink hover:bg-bg';
+
   return (
     <button
       onClick={onClick}
+      onDragOver={onFileDrop ? (e) => {
+        if (!isGroveDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragOver) setDragOver(true);
+      } : undefined}
+      onDragLeave={onFileDrop ? (e) => {
+        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDragOver(false);
+      } : undefined}
+      onDrop={onFileDrop ? (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
+        const ids = getDragFileIds(e);
+        if (ids) onFileDrop(ids);
+      } : undefined}
       className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${cls}`}
     >
       <span className="truncate">{label}</span>
@@ -215,12 +246,41 @@ function PeerItem({ ship, active, onClick, onUnsubscribe }: { ship: string; acti
   );
 }
 
-function ViewItem({ view, active, onClick, onEdit, onDelete }: { view: View; active: boolean; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
+function ViewItem({ view, active, onClick, onEdit, onDelete, onDrop }: {
+  view: View; active: boolean; onClick: () => void;
+  onEdit: () => void; onDelete: () => void; onDrop: (fileIds: string[]) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
   return (
-    <div className={`group flex items-center pr-2 ${active ? 'bg-accent-soft' : 'hover:bg-bg'}`}>
+    <div
+      className={`group flex items-center pr-2 ${
+        dragOver ? 'bg-accent-soft ring-2 ring-accent'
+        : active ? 'bg-accent-soft'
+        : 'hover:bg-bg'
+      }`}
+      onDragOver={(e) => {
+        if (!isGroveDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragOver) setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
+        const ids = getDragFileIds(e);
+        if (ids) onDrop(ids);
+      }}
+    >
       <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: view.color }} />
         <span className={`truncate ${active ? 'text-accent font-medium' : 'text-ink'}`}>{view.name}</span>
+        {view.shared && <span className="text-[10px] text-muted shrink-0" title="Shared view">shared</span>}
       </button>
       <div className="hidden group-hover:flex gap-1">
         <button className="text-xs text-muted hover:text-ink px-1" onClick={onEdit} title="Edit">✎</button>

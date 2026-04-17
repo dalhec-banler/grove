@@ -18,6 +18,7 @@ export interface View {
   name: string;
   tags: string[];
   color: string;
+  shared?: SharedViewConfig;
 }
 
 export interface Share {
@@ -66,6 +67,19 @@ export interface GroupInfo {
   members: number;
 }
 
+export interface SharedViewConfig {
+  allowed: string[];
+  groupFlag: GroupFlag | null;
+}
+
+export interface GroveViewListing {
+  host: string;
+  name: string;
+  tags: string[];
+  color: string;
+  files: FileMeta[];
+}
+
 export interface CanopyConfig {
   mode: CanopyMode;
   name: string;
@@ -104,7 +118,11 @@ export type Update =
   | { type: 'canopyEntryRemoved'; fileId: FileId }
   | { type: 'canopyConfigUpdated'; config: CanopyConfig }
   | { type: 'canopyPeerUpdated'; listing: CanopyListing }
-  | { type: 'canopyPeerRemoved'; host: string };
+  | { type: 'canopyPeerRemoved'; host: string }
+  | { type: 'viewShared'; name: string; allowed: string[]; groupFlag: GroupFlag | null }
+  | { type: 'viewUnshared'; name: string }
+  | { type: 'sharedViewUpdated'; listing: GroveViewListing }
+  | { type: 'sharedViewRemoved'; host: string; name: string };
 
 export type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
@@ -180,6 +198,7 @@ export interface RawView {
   name: string;
   tags?: string[];
   color: string;
+  shared?: unknown;
 }
 
 export interface RawShare {
@@ -198,6 +217,19 @@ export interface RawGroupInfo {
   name: string;
   title?: string;
   members?: number;
+}
+
+export interface RawSharedViewConfig {
+  allowed?: string[];
+  'group-flag'?: { host: string; name: string } | null;
+}
+
+export interface RawGroveViewListing {
+  host: string;
+  name: string;
+  tags?: string[];
+  color?: string;
+  files?: RawFileMeta[];
 }
 
 export type GroveAction =
@@ -230,4 +262,8 @@ export type GroveAction =
   | { 'remove-friend': { who: string } }
   | { 'set-canopy-group': { flag: GroupFlag | null } }
   | { 'subscribe-to': { who: string } }
-  | { 'unsubscribe-from': { who: string } };
+  | { 'unsubscribe-from': { who: string } }
+  | { 'share-view': { name: string; allowed: string[]; 'group-flag': GroupFlag | null } }
+  | { 'unshare-view': { name: string } }
+  | { 'subscribe-view': { who: string; name: string } }
+  | { 'unsubscribe-view': { who: string; name: string } };

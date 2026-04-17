@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   FileMeta, View, Share, Update, InboxEntry,
-  CanopyEntry, CanopyConfig, CanopyListing, GroupInfo,
+  CanopyEntry, CanopyConfig, CanopyListing, GroupInfo, GroveViewListing,
 } from './types';
 import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
   scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
-  subscribeUpdates,
+  scrySharedViewPeers, subscribeUpdates,
 } from './api';
 
 function mapSet<K, V>(map: Map<K, V>, key: K, value: V): Map<K, V> {
@@ -33,6 +33,7 @@ export function useGroveData(
   const [canopyConfig, setCanopyConfig] = useState<CanopyConfig>({ mode: 'open', name: '', friends: [], groupFlag: null });
   const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
   const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
+  const [svPeers, setSvPeers] = useState<Map<string, GroveViewListing>>(new Map());
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingShareFor, setPendingShareFor] = useState<string | null>(null);
@@ -41,9 +42,10 @@ export function useGroveData(
   filesRef.current = files;
 
   const refreshAll = useCallback(async () => {
-    const [fileList, viewList, shareList, inboxList, trustData, entryList, canopyConf, peerList, groupList] = await Promise.all([
+    const [fileList, viewList, shareList, inboxList, trustData, entryList, canopyConf, peerList, groupList, svPeerList] = await Promise.all([
       scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
       scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
+      scrySharedViewPeers(),
     ]);
     setFiles(new Map(fileList.map((m) => [m.id, m])));
     setViews(new Map(viewList.map((w) => [w.name, w])));
@@ -54,6 +56,7 @@ export function useGroveData(
     setCanopyEntries(new Map(entryList.map((e) => [e.id, e])));
     setCanopyConfig(canopyConf);
     setCanopyPeers(new Map(peerList.map((l) => [l.host, l])));
+    setSvPeers(new Map(svPeerList.map((l) => [`${l.host}/${l.name}`, l])));
     setAvailableGroups(groupList);
     setConnected(true);
     setLoadError(null);
@@ -94,7 +97,10 @@ export function useGroveData(
         });
         break;
       case 'viewAdded':
-        setViews((prev) => mapSet(prev, u.name, { name: u.name, tags: u.tags, color: u.color }));
+        setViews((prev) => {
+          const existing = prev.get(u.name);
+          return mapSet(prev, u.name, { name: u.name, tags: u.tags, color: u.color, shared: existing?.shared });
+        });
         break;
       case 'viewRemoved':
         setViews((prev) => mapDel(prev, u.name));
@@ -159,6 +165,27 @@ export function useGroveData(
       case 'canopyPeerRemoved':
         setCanopyPeers((prev) => mapDel(prev, u.host));
         break;
+      case 'viewShared':
+        setViews((prev) => {
+          const view = prev.get(u.name);
+          if (!view) return prev;
+          return mapSet(prev, u.name, { ...view, shared: { allowed: u.allowed, groupFlag: u.groupFlag } });
+        });
+        break;
+      case 'viewUnshared':
+        setViews((prev) => {
+          const view = prev.get(u.name);
+          if (!view) return prev;
+          const { shared: _, ...rest } = view;
+          return mapSet(prev, u.name, rest as View);
+        });
+        break;
+      case 'sharedViewUpdated':
+        setSvPeers((prev) => mapSet(prev, `${u.listing.host}/${u.listing.name}`, u.listing));
+        break;
+      case 'sharedViewRemoved':
+        setSvPeers((prev) => mapDel(prev, `${u.host}/${u.name}`));
+        break;
     }
   }, [isUploadingRef, uploadCollectedRef]);
 
@@ -176,7 +203,7 @@ export function useGroveData(
 
   return {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, availableGroups,
+    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, availableGroups,
     connected, loadError, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
   };
 }

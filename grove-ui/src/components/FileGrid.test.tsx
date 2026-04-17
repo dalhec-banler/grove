@@ -13,7 +13,9 @@ function renderGrid(overrides = {}) {
   const props = {
     files,
     activeId: null,
+    selectedIds: new Set<string>(),
     onSelect: vi.fn(),
+    onToggleSelect: vi.fn(),
     onToggleStar: vi.fn(),
     onShare: vi.fn(),
     onDelete: vi.fn(),

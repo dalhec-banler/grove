@@ -2,9 +2,9 @@ import Urbit from '@urbit/http-api';
 import type {
   FileMeta, View, Share, Update, InboxEntry, Trust,
   CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
-  GroveAction, CanopySearchHit,
+  GroveAction, CanopySearchHit, GroveViewListing, GroupFlag,
   RawFileMeta, RawInboxEntry, RawCanopyEntry, RawCanopyConfig, RawCanopyListing,
-  RawView, RawShare, RawCanopySearchHit, RawGroupInfo,
+  RawView, RawShare, RawCanopySearchHit, RawGroupInfo, RawGroveViewListing,
 } from './types';
 
 declare global {
@@ -64,7 +64,17 @@ export async function scryViews(): Promise<View[]> {
   const raw = await getApi().scry<unknown>({ app: 'grove', path: '/views' });
   return (Array.isArray(raw) ? raw : []).map((v) => {
     const r = v as RawView;
-    return { name: r.name, tags: r.tags ?? [], color: r.color };
+    const view: View = { name: r.name, tags: r.tags ?? [], color: r.color };
+    if (r.shared && typeof r.shared === 'object') {
+      const s = r.shared as { allowed?: string[]; 'group-flag'?: { host: string; name: string } | null };
+      view.shared = {
+        allowed: s.allowed ?? [],
+        groupFlag: s['group-flag'] && s['group-flag'].host
+          ? { host: s['group-flag'].host, name: s['group-flag'].name }
+          : null,
+      };
+    }
+    return view;
   });
 }
 
@@ -186,6 +196,28 @@ export async function scryGroups(): Promise<GroupInfo[]> {
   }
 }
 
+function gvlFromJson(o: RawGroveViewListing): GroveViewListing {
+  return {
+    host: o.host,
+    name: o.name ?? '',
+    tags: o.tags ?? [],
+    color: o.color ?? '',
+    files: (o.files ?? []).map((r) => fileFromJson(r as RawFileMeta)),
+  };
+}
+
+function parseGroupFlag(o: unknown): GroupFlag | null {
+  if (!o || typeof o !== 'object') return null;
+  const gf = o as { host?: string; name?: string };
+  if (!gf.host) return null;
+  return { host: gf.host, name: gf.name ?? '' };
+}
+
+export async function scrySharedViewPeers(): Promise<GroveViewListing[]> {
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/shared-view-peers' });
+  return (Array.isArray(raw) ? raw : []).map((r) => gvlFromJson(r as RawGroveViewListing));
+}
+
 export function poke(action: GroveAction): Promise<void> {
   return new Promise((resolve, reject) => {
     getApi().poke({
@@ -304,6 +336,19 @@ export function normalizeUpdate(data: any): Update | null {
       return { type: 'canopyPeerUpdated', listing: canopyListingFromJson(data.listing) };
     case 'canopyPeerRemoved':
       return { type: 'canopyPeerRemoved', host: data.host };
+    case 'viewShared':
+      return {
+        type: 'viewShared',
+        name: data.name,
+        allowed: data.allowed ?? [],
+        groupFlag: parseGroupFlag(data.groupFlag ?? data['group-flag']),
+      };
+    case 'viewUnshared':
+      return { type: 'viewUnshared', name: data.name };
+    case 'sharedViewUpdated':
+      return { type: 'sharedViewUpdated', listing: gvlFromJson(data.listing) };
+    case 'sharedViewRemoved':
+      return { type: 'sharedViewRemoved', host: data.host, name: data.name };
   }
   console.warn('[normalizeUpdate] unrecognized update type:', data.type);
   return null;

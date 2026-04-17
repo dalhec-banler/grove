@@ -1,19 +1,25 @@
 import type { FileMeta } from '../types';
 import { formatBytes, formatDate } from '../format';
 import { fileUrl } from '../urls';
+import { setDragFileIds } from '../dnd';
 import { GRID_STYLE } from '../styles';
 import Thumb from './Thumb';
 
 interface Props {
   files: FileMeta[];
   activeId: string | null;
+  selectedIds: Set<string>;
   onSelect: (id: string) => void;
+  onToggleSelect: (id: string) => void;
   onToggleStar: (id: string) => void;
   onShare: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export default function FileGrid({ files, activeId, onSelect, onToggleStar, onShare, onDelete }: Props) {
+export default function FileGrid({
+  files, activeId, selectedIds, onSelect, onToggleSelect,
+  onToggleStar, onShare, onDelete,
+}: Props) {
   if (files.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-faint text-sm">
@@ -29,10 +35,16 @@ export default function FileGrid({ files, activeId, onSelect, onToggleStar, onSh
             key={f.id}
             file={f}
             active={activeId === f.id}
+            selected={selectedIds.has(f.id)}
             onSelect={() => onSelect(f.id)}
+            onToggleSelect={() => onToggleSelect(f.id)}
             onToggleStar={() => onToggleStar(f.id)}
             onShare={() => onShare(f.id)}
             onDelete={() => onDelete(f.id)}
+            onDragStart={(e) => {
+              const ids = selectedIds.has(f.id) ? Array.from(selectedIds) : [f.id];
+              setDragFileIds(e, ids);
+            }}
           />
         ))}
       </div>
@@ -40,21 +52,38 @@ export default function FileGrid({ files, activeId, onSelect, onToggleStar, onSh
   );
 }
 
-function Card({ file, active, onSelect, onToggleStar, onShare, onDelete }: {
-  file: FileMeta; active: boolean; onSelect: () => void;
+function Card({ file, active, selected, onSelect, onToggleSelect, onToggleStar, onShare, onDelete, onDragStart }: {
+  file: FileMeta; active: boolean; selected: boolean;
+  onSelect: () => void; onToggleSelect: () => void;
   onToggleStar: () => void; onShare: () => void; onDelete: () => void;
+  onDragStart: (e: React.DragEvent) => void;
 }) {
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
       onClick={onSelect}
-      className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${active ? 'border-accent ring-2 ring-accent-soft' : 'border-border hover:border-ink/20'}`}
+      className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${
+        selected ? 'border-accent ring-2 ring-accent/30'
+        : active ? 'border-accent ring-2 ring-accent-soft'
+        : 'border-border hover:border-ink/20'
+      }`}
     >
       <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
         <Thumb mark={file.fileMark} src={fileUrl(file.id)} size="fill" />
       </div>
       <div className="p-2">
-        <div className="text-sm truncate" title={file.name}>{file.name}</div>
-        <div className="text-xs text-muted flex justify-between">
+        <div className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => { e.stopPropagation(); onToggleSelect(); }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-3.5 h-3.5 accent-accent shrink-0"
+          />
+          <div className="text-sm truncate" title={file.name}>{file.name}</div>
+        </div>
+        <div className="text-xs text-muted flex justify-between mt-0.5">
           <span>{formatBytes(file.size)}</span>
           <span>{formatDate(file.modified)}</span>
         </div>

@@ -15,6 +15,7 @@ import ViewModal from './components/ViewModal';
 import ShareModal from './components/ShareModal';
 import FileDetails from './components/FileDetails';
 import BulkTagModal from './components/BulkTagModal';
+import BulkActionBar from './components/BulkActionBar';
 import InboxView from './components/InboxView';
 import CanopyView from './components/CanopyView';
 import ToolbarControls from './components/ToolbarControls';
@@ -34,9 +35,11 @@ export default function App() {
 
   const [selection, setSelection] = useState<Selection>({ kind: 'all' });
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showViewModal, setShowViewModal] = useState(false);
   const [editingView, setEditingView] = useState<View | null>(null);
   const [publishingFile, setPublishingFile] = useState<FileMeta | null>(null);
+  const [bulkTagForSelection, setBulkTagForSelection] = useState<string[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const fileToolbar = useToolbarState('newest', () =>
@@ -52,6 +55,9 @@ export default function App() {
     setErrorHandler((msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); });
   }, []);
   useEffect(() => { localStorage.setItem('grove:viewMode', fileToolbar.viewMode); }, [fileToolbar.viewMode]);
+
+  // Clear file selection when navigating to a different section.
+  useEffect(() => { setSelectedIds(new Set()); }, [selection]);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -84,8 +90,67 @@ export default function App() {
     });
   }, [shares, setShareDialog, setPendingShareFor]);
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const deleteFile = useCallback((id: string) => {
+    if (!confirm('Delete this file?')) return;
+    pokeSafe({ delete: { id } });
+    setActiveFileId((prev) => prev === id ? null : prev);
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const bulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} file${selectedIds.size > 1 ? 's' : ''}?`)) return;
+    for (const id of selectedIds) pokeSafe({ delete: { id } });
+    setSelectedIds(new Set());
+    setActiveFileId(null);
+  }, [selectedIds]);
+
+  const handleDropOnView = useCallback((viewName: string, fileIds: string[]) => {
+    const view = views.get(viewName);
+    if (!view || view.tags.length === 0) return;
+    for (const id of fileIds) {
+      const file = files.get(id);
+      if (!file) continue;
+      const newTags = view.tags.filter((t) => !file.tags.includes(t));
+      if (newTags.length > 0) pokeSafe({ 'add-tags': { id, tags: newTags } });
+    }
+  }, [views, files]);
+
+  const handleDropOnCanopy = useCallback((fileIds: string[]) => {
+    if (fileIds.length === 1) {
+      const file = files.get(fileIds[0]);
+      if (file) setPublishingFile(file);
+    } else {
+      for (const id of fileIds) {
+        const file = files.get(id);
+        if (!file) continue;
+        pokeSafe({
+          publish: { id, 'display-name': file.name, tags: file.tags, description: file.description },
+        });
+      }
+    }
+  }, [files]);
+
   const bulkTagFiles = upload.bulkTagIds
     ? upload.bulkTagIds.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
+    : [];
+
+  const bulkTagSelFiles = bulkTagForSelection
+    ? bulkTagForSelection.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
     : [];
 
   const canopyPeerList = useMemo(
@@ -95,6 +160,8 @@ export default function App() {
 
   const isCanopySelection =
     selection.kind === 'canopy-mine' || selection.kind === 'canopy-browse' || selection.kind === 'canopy-peer';
+
+  const isFileView = !isCanopySelection && selection.kind !== 'inbox';
 
   const toolbarProps = useMemo(() => {
     const fromToolbar = (tb: typeof fileToolbar, placeholder: string, tint: 'accent' | 'canopy') => ({
@@ -124,12 +191,6 @@ export default function App() {
     default: activeTitle = '';
   }
 
-  const deleteFile = useCallback((id: string) => {
-    if (!confirm('Delete this file?')) return;
-    pokeSafe({ delete: { id } });
-    setActiveFileId((prev) => prev === id ? null : prev);
-  }, []);
-
   return (
     <div className="flex h-full relative" {...upload.dragHandlers}>
       <Sidebar
@@ -156,6 +217,8 @@ export default function App() {
             setSelection({ kind: 'canopy-browse' });
           }
         }}
+        onDropOnView={handleDropOnView}
+        onDropOnCanopy={handleDropOnCanopy}
       />
       <main className="flex-1 flex flex-col min-w-0">
         {loadError && (
@@ -184,79 +247,93 @@ export default function App() {
           </div>
         </header>
         <div className="flex-1 flex min-h-0">
-          {selection.kind === 'inbox' ? (
-            <InboxView
-              entries={Array.from(inbox.values())}
-              trusted={trusted}
-              blocked={blocked}
-              search={inboxToolbar.search}
-              sortKey={inboxToolbar.sort}
-              viewMode={inboxToolbar.viewMode}
-              onAccept={inboxActions.accept}
-              onDecline={inboxActions.decline}
-              onTrust={inboxActions.trust}
-              onUntrust={inboxActions.untrust}
-              onBlock={inboxActions.block}
-              onUnblock={inboxActions.unblock}
-              onFetch={inboxActions.fetch}
-              onPlant={inboxActions.plant}
-              onDropCache={inboxActions.dropCache}
-            />
-          ) : selection.kind === 'canopy-mine' ? (
-            <CanopyView
-              kind="mine"
-              entries={Array.from(canopyEntries.values())}
-              config={canopyConfig}
-              search={canopyToolbar.search}
-              sortKey={canopyToolbar.sort}
-              viewMode={canopyToolbar.viewMode}
-              onUnpublish={canopyActions.unpublish}
-              onSetMode={canopyActions.setMode}
-              onSetName={canopyActions.setName}
-              onAddFriend={canopyActions.addFriend}
-              onRemoveFriend={canopyActions.removeFriend}
-              onSetGroup={canopyActions.setGroup}
-              groups={availableGroups}
-            />
-          ) : selection.kind === 'canopy-browse' ? (
-            <CanopyView
-              kind="browse"
-              subscribed={new Set(canopyPeers.keys())}
-              onSubscribe={canopyActions.subscribe}
-            />
-          ) : selection.kind === 'canopy-peer' ? (
-            <CanopyView
-              kind="peer"
-              host={selection.ship}
-              listing={canopyPeers.get(selection.ship) ?? null}
-              cache={inbox}
-              search={canopyToolbar.search}
-              sortKey={canopyToolbar.sort}
-              viewMode={canopyToolbar.viewMode}
-              onFetch={canopyActions.fetchEntry}
-              onPlant={canopyActions.plantEntry}
-              onDropCache={canopyActions.dropCache}
-              onUnsubscribe={canopyActions.unsubscribe}
-            />
-          ) : fileToolbar.viewMode === 'list' ? (
-            <FileList
-              files={visibleFiles}
-              activeId={activeFileId}
-              onSelect={setActiveFileId}
-              onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
-              onShare={openShareFor}
-              onDelete={deleteFile}
-            />
-          ) : (
-            <FileGrid
-              files={visibleFiles}
-              activeId={activeFileId}
-              onSelect={setActiveFileId}
-              onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
-              onShare={openShareFor}
-              onDelete={deleteFile}
-            />
-          )}
+          <div className="flex-1 flex flex-col min-w-0">
+            {selection.kind === 'inbox' ? (
+              <InboxView
+                entries={Array.from(inbox.values())}
+                trusted={trusted}
+                blocked={blocked}
+                search={inboxToolbar.search}
+                sortKey={inboxToolbar.sort}
+                viewMode={inboxToolbar.viewMode}
+                onAccept={inboxActions.accept}
+                onDecline={inboxActions.decline}
+                onTrust={inboxActions.trust}
+                onUntrust={inboxActions.untrust}
+                onBlock={inboxActions.block}
+                onUnblock={inboxActions.unblock}
+                onFetch={inboxActions.fetch}
+                onPlant={inboxActions.plant}
+                onDropCache={inboxActions.dropCache}
+              />
+            ) : selection.kind === 'canopy-mine' ? (
+              <CanopyView
+                kind="mine"
+                entries={Array.from(canopyEntries.values())}
+                config={canopyConfig}
+                search={canopyToolbar.search}
+                sortKey={canopyToolbar.sort}
+                viewMode={canopyToolbar.viewMode}
+                onUnpublish={canopyActions.unpublish}
+                onSetMode={canopyActions.setMode}
+                onSetName={canopyActions.setName}
+                onAddFriend={canopyActions.addFriend}
+                onRemoveFriend={canopyActions.removeFriend}
+                onSetGroup={canopyActions.setGroup}
+                groups={availableGroups}
+              />
+            ) : selection.kind === 'canopy-browse' ? (
+              <CanopyView
+                kind="browse"
+                subscribed={new Set(canopyPeers.keys())}
+                onSubscribe={canopyActions.subscribe}
+              />
+            ) : selection.kind === 'canopy-peer' ? (
+              <CanopyView
+                kind="peer"
+                host={selection.ship}
+                listing={canopyPeers.get(selection.ship) ?? null}
+                cache={inbox}
+                search={canopyToolbar.search}
+                sortKey={canopyToolbar.sort}
+                viewMode={canopyToolbar.viewMode}
+                onFetch={canopyActions.fetchEntry}
+                onPlant={canopyActions.plantEntry}
+                onDropCache={canopyActions.dropCache}
+                onUnsubscribe={canopyActions.unsubscribe}
+              />
+            ) : fileToolbar.viewMode === 'list' ? (
+              <FileList
+                files={visibleFiles}
+                activeId={activeFileId}
+                selectedIds={selectedIds}
+                onSelect={setActiveFileId}
+                onToggleSelect={toggleSelect}
+                onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
+                onShare={openShareFor}
+                onDelete={deleteFile}
+              />
+            ) : (
+              <FileGrid
+                files={visibleFiles}
+                activeId={activeFileId}
+                selectedIds={selectedIds}
+                onSelect={setActiveFileId}
+                onToggleSelect={toggleSelect}
+                onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
+                onShare={openShareFor}
+                onDelete={deleteFile}
+              />
+            )}
+            {isFileView && selectedIds.size > 0 && (
+              <BulkActionBar
+                count={selectedIds.size}
+                onDelete={bulkDelete}
+                onTag={() => setBulkTagForSelection(Array.from(selectedIds))}
+                onClear={() => setSelectedIds(new Set())}
+              />
+            )}
+          </div>
           {activeFile && !isCanopySelection && (
             <FileDetails
               file={activeFile}
@@ -291,9 +368,15 @@ export default function App() {
         <ViewModal
           initial={editingView}
           allTags={allTags}
+          groups={availableGroups}
           onClose={() => setShowViewModal(false)}
-          onSave={(name, tags, color) => {
+          onSave={(name, tags, color, shared) => {
             pokeSafe({ mkview: { name, tags, color } });
+            if (shared) {
+              pokeSafe({ 'share-view': { name, allowed: shared.allowed, 'group-flag': shared.groupFlag } });
+            } else if (editingView?.shared) {
+              pokeSafe({ 'unshare-view': { name } });
+            }
             setShowViewModal(false);
           }}
         />
@@ -332,6 +415,19 @@ export default function App() {
           }}
         />
       )}
+      {bulkTagForSelection && bulkTagSelFiles.length > 0 && (
+        <BulkTagModal
+          files={bulkTagSelFiles}
+          allTags={allTags}
+          onClose={() => setBulkTagForSelection(null)}
+          onApply={({ tags }) => {
+            for (const id of bulkTagForSelection) {
+              if (tags.length > 0) pokeSafe({ 'add-tags': { id, tags } });
+            }
+            setBulkTagForSelection(null);
+          }}
+        />
+      )}
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50">
           {toast}
@@ -340,4 +436,3 @@ export default function App() {
     </div>
   );
 }
-

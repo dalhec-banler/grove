@@ -19,6 +19,7 @@ vi.mock('./api', () => ({
   scryCanopyConfig: vi.fn(() => Promise.resolve({ mode: 'open', name: '', friends: [], groupFlag: null })),
   scryCanopyPeers: vi.fn(() => Promise.resolve([])),
   scryGroups: vi.fn(() => Promise.resolve([])),
+  scrySharedViewPeers: vi.fn(() => Promise.resolve([])),
   subscribeUpdates: (...args: [any, any?]) => mockSubscribe(...args),
 }));
 
@@ -129,7 +130,7 @@ describe('useGroveData', () => {
     act(() => {
       handler({ type: 'viewAdded', name: 'photos', tags: ['photo'], color: '#f00' });
     });
-    expect(result.current.views.get('photos')).toEqual({ name: 'photos', tags: ['photo'], color: '#f00' });
+    expect(result.current.views.get('photos')).toEqual({ name: 'photos', tags: ['photo'], color: '#f00', shared: undefined });
 
     act(() => {
       handler({ type: 'viewRemoved', name: 'photos' });

@@ -52,6 +52,19 @@
       entries=(list canopy-entry)
   ==
 ::
++$  shared-view-config
+  $:  allowed=(set @p)
+      group-flag=(unit [ship term])
+  ==
+::
++$  grove-view-listing
+  $:  host=@p
+      name=@t
+      tags=(list tag)
+      color=@t
+      files=(list file-meta)
+  ==
+::
 +$  action
   $%  [%upload name=@t file-mark=@tas data=octs tags=(set tag)]
       [%delete id=file-id]
@@ -84,6 +97,11 @@
       [%set-canopy-group flag=(unit [ship term])]
       [%subscribe-to who=@p]
       [%unsubscribe-from who=@p]
+      ::  shared views
+      [%share-view name=@t allowed=(set @p) group-flag=(unit [ship term])]
+      [%unshare-view name=@t]
+      [%subscribe-view who=@p name=@t]
+      [%unsubscribe-view who=@p name=@t]
   ==
 ::
 +$  update
@@ -107,6 +125,11 @@
       [%canopy-config-updated =canopy-config]
       [%canopy-peer-updated =canopy-listing]
       [%canopy-peer-removed host=@p]
+      ::  shared views
+      [%view-shared name=@t allowed=(set @p) group-flag=(unit [ship term])]
+      [%view-unshared name=@t]
+      [%shared-view-updated =grove-view-listing]
+      [%shared-view-removed host=@p name=@t]
   ==
 ::
 +$  grove-remote

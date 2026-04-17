@@ -86,10 +86,29 @@
       peers=(map @p canopy-listing)
       subs=(set @p)
   ==
-+$  versioned-state  $%(state-6 state-5 state-4 state-3 state-2 state-1 state-0)
++$  state-7
+  $:  %7
+      f=(map file-id file-meta)
+      b=(map file-id octs)
+      v=(map @t [(set tag) @t])
+      s=(map share-token file-id)
+      al=(map file-id (set @p))
+      inbox=(map [@p file-id] inbox-entry)
+      trusted=(set @p)
+      blocked=(set @p)
+      cache=(map [@p file-id] [file-meta octs])
+      canopy=(map file-id canopy-entry)
+      cfg=canopy-config
+      peers=(map @p canopy-listing)
+      subs=(set @p)
+      sv=(map @t shared-view-config)
+      sv-subs=(map [@p @t] ?)
+      sv-peers=(map [@p @t] grove-view-listing)
+  ==
++$  versioned-state  $%(state-7 state-6 state-5 state-4 state-3 state-2 state-1 state-0)
 --
 %-  agent:dbug
-=|  state-6
+=|  state-7
 =*  state  -
 ^-  agent:gall
 |_  =bowl:gall
@@ -108,13 +127,14 @@
   =/  old  !<(versioned-state old-vase)
   |^
   ?-  -.old
-      %6
+      %7
     :_  this(state old)
     :~  [%pass /bind-share %arvo %e %connect [~ /grove-share] %grove]
         [%pass /bind-file %arvo %e %connect [~ /grove-file] %grove]
         [%pass /bind-remote %arvo %e %connect [~ /grove-remote-file] %grove]
     ==
     ::
+    %6  $(old (six-to-seven old))
     %5  $(old (five-to-six old))
     %4  $(old (four-to-five old))
     %3  $(old (three-to-four old))
@@ -132,6 +152,15 @@
     |=  s=state-3
     ^-  state-4
     [%4 f=f.s b=b.s v=v.s s=s.s al=al.s inbox=~ trusted=~ blocked=~ cache=~]
+  ::
+  ++  six-to-seven
+    |=  s=state-6
+    ^-  state-7
+    :*  %7  f=f.s  b=b.s  v=v.s  s=s.s  al=al.s  inbox=inbox.s
+        trusted=trusted.s  blocked=blocked.s  cache=cache.s
+        canopy=canopy.s  cfg=cfg.s  peers=peers.s  subs=subs.s
+        sv=~  sv-subs=~  sv-peers=~
+    ==
   ::
   ++  five-to-six
     |=  s=state-5
@@ -210,56 +239,69 @@
         :*  i  name.a  file-mark.a  p.data.a
             tags.a  now.bowl  now.bowl  ''  |
         ==
-      :-  (fact-update [%file-added fm])
-      %_  state
-        f  (~(put by f) i fm)
-        b  (~(put by b) i data.a)
-      ==
+      =/  new-state
+        %_  state
+          f  (~(put by f) i fm)
+          b  (~(put by b) i data.a)
+        ==
+      :-  (weld (fact-update [%file-added fm]) (sv-broadcast-all new-state))
+      new-state
     ::
         %delete
       ?.  (~(has by f) id.a)  `state
-      :-  (fact-update [%file-removed id.a])
-      %_  state
-        f  (~(del by f) id.a)
-        b  (~(del by b) id.a)
-      ==
+      =/  new-state
+        %_  state
+          f  (~(del by f) id.a)
+          b  (~(del by b) id.a)
+        ==
+      :-  (weld (fact-update [%file-removed id.a]) (sv-broadcast-all new-state))
+      new-state
     ::
         %rename
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(name name.a, modified now.bowl)
-      :-  (fact-update [%file-updated new-fm])
-      state(f (~(put by f) id.a new-fm))
+      =/  new-f  (~(put by f) id.a new-fm)
+      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
+      state(f new-f)
     ::
         %toggle-star
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(starred !starred.o)
-      :-  (fact-update [%file-updated new-fm])
-      state(f (~(put by f) id.a new-fm))
+      =/  new-f  (~(put by f) id.a new-fm)
+      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
+      state(f new-f)
     ::
         %add-tags
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(tags (~(uni in tags.o) tags.a))
-      :-  (fact-update [%file-updated new-fm])
-      state(f (~(put by f) id.a new-fm))
+      =/  new-f  (~(put by f) id.a new-fm)
+      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
+      state(f new-f)
     ::
         %remove-tags
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(tags (~(dif in tags.o) tags.a))
-      :-  (fact-update [%file-updated new-fm])
-      state(f (~(put by f) id.a new-fm))
+      =/  new-f  (~(put by f) id.a new-fm)
+      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
+      state(f new-f)
     ::
         %mkview
-      :-  (fact-update [%view-added name.a tags.a color.a])
-      state(v (~(put by v) name.a [tags.a color.a]))
+      =/  new-v  (~(put by v) name.a [tags.a color.a])
+      =/  new-state  state(v new-v)
+      :-  (weld (fact-update [%view-added name.a tags.a color.a]) (sv-broadcast-all new-state))
+      new-state
     ::
         %rmview
       ?.  (~(has by v) name.a)  `state
-      :-  (fact-update [%view-removed name.a])
-      state(v (~(del by v) name.a))
+      =/  kick-cards=(list card)
+        ?.  (~(has by sv) name.a)  ~
+        [%give %kick ~[/shared-view/(scot %tas name.a)] ~]~
+      :-  :(weld (fact-update [%view-removed name.a]) kick-cards)
+      state(v (~(del by v) name.a), sv (~(del by sv) name.a))
     ::
         %share
       ?.  (~(has by f) id.a)  `state
@@ -452,6 +494,37 @@
       %+  weld
         `(list card)`~[[%pass wire %agent [who.a %grove] %leave ~]]
       (fact-update [%canopy-peer-removed who.a])
+    ::
+        %share-view
+      ?.  (~(has by v) name.a)  `state
+      =/  svc=shared-view-config  [allowed.a group-flag.a]
+      =/  new-state  state(sv (~(put by sv) name.a svc))
+      :-  (weld (fact-update [%view-shared name.a allowed.a group-flag.a]) (sv-broadcast-all new-state))
+      new-state
+    ::
+        %unshare-view
+      ?.  (~(has by sv) name.a)  `state
+      =/  kick-cards=(list card)
+        [%give %kick ~[/shared-view/(scot %tas name.a)] ~]~
+      :-  (weld (fact-update [%view-unshared name.a]) kick-cards)
+      state(sv (~(del by sv) name.a))
+    ::
+        %subscribe-view
+      =/  wire=path  /sv-sub/(scot %p who.a)/(scot %tas name.a)
+      :_  state
+      :~  [%pass wire %agent [who.a %grove] %watch /shared-view/(scot %tas name.a)]
+      ==
+    ::
+        %unsubscribe-view
+      =/  wire=path  /sv-sub/(scot %p who.a)/(scot %tas name.a)
+      =/  k=[@p @t]  [who.a name.a]
+      :_  %_  state
+            sv-subs  (~(del by sv-subs) k)
+            sv-peers  (~(del by sv-peers) k)
+          ==
+      %+  weld
+        `(list card)`~[[%pass wire %agent [who.a %grove] %leave ~]]
+      (fact-update [%shared-view-removed who.a name.a])
     ==
   ::
   ++  handle-offer
@@ -592,6 +665,39 @@
       :~  type+s+'canopyPeerRemoved'
           host+s+(scot %p host.u)
       ==
+    ::
+        %view-shared
+      %-  pairs
+      :~  type+s+'viewShared'
+          name+s+name.u
+          allowed+a+(turn ~(tap in allowed.u) |=(p=@p s+(scot %p p)))
+          :-  %group-flag
+          ?~  group-flag.u  ~
+          =/  gf  u.group-flag.u
+          %-  pairs
+          :~  host+s+(scot %p -.gf)
+              name+s++.gf
+          ==
+      ==
+    ::
+        %view-unshared
+      %-  pairs
+      :~  type+s+'viewUnshared'
+          name+s+name.u
+      ==
+    ::
+        %shared-view-updated
+      %-  pairs
+      :~  type+s+'sharedViewUpdated'
+          listing+(gvl-json grove-view-listing.u)
+      ==
+    ::
+        %shared-view-removed
+      %-  pairs
+      :~  type+s+'sharedViewRemoved'
+          host+s+(scot %p host.u)
+          name+s+name.u
+      ==
     ==
   ::
   ++  fm-upd-json
@@ -677,6 +783,17 @@
         entries+a+(turn entries.l ce-upd-json)
     ==
   ::
+  ++  gvl-json
+    |=  l=grove-view-listing
+    ^-  json
+    %-  pairs:enjs:format
+    :~  host+s+(scot %p host.l)
+        name+s+name.l
+        tags+a+(turn tags.l |=(t=tag s+(crip (trip t))))
+        color+s+color.l
+        files+a+(turn files.l fm-json)
+    ==
+  ::
   ++  canopy-listing-from
     |=  st=_state
     ^-  canopy-listing
@@ -688,6 +805,29 @@
     |=  st=_state
     ^-  (list card)
     [%give %fact ~[/canopy] %grove-canopy-listing !>((canopy-listing-from st))]~
+  ::
+  ++  sv-broadcast-all
+    |=  st=_state
+    ^-  (list card)
+    ?:  =(~ sv.st)  ~
+    %-  zing
+    %+  turn  ~(tap by sv.st)
+    |=  [nm=@t svc=shared-view-config]
+    (sv-broadcast-one nm st)
+  ::
+  ++  sv-broadcast-one
+    |=  [nm=@t st=_state]
+    ^-  (list card)
+    =/  vw  (~(get by v.st) nm)
+    ?~  vw  ~
+    =/  tgs=(set tag)  -.u.vw
+    =/  clr=@t  +.u.vw
+    =/  matching=(list file-meta)
+      %+  skim  ~(val by f.st)
+      |=(m=file-meta =(tgs (~(int in tags.m) tgs)))
+    =/  lst=grove-view-listing
+      [host=our.bowl name=nm tags=~(tap in tgs) color=clr files=matching]
+    [%give %fact ~[/shared-view/(scot %tas nm)] %grove-view-listing !>(`grove-view-listing`lst)]~
   ::
   ++  dm-notify
     |=  [target=@p tk=share-token fname=@t]
@@ -859,6 +999,10 @@
       ``json+!>(`json`(canopy-search-json term))
     [%x %canopy %groups ~]
       ``json+!>(`json`(available-groups-json ~))
+    [%x %shared-views ~]
+      ``json+!>(`json`(shared-views-json ~))
+    [%x %shared-view-peers ~]
+      ``json+!>(`json`(shared-view-peers-json ~))
   ==
   ::
   ++  files-json
@@ -873,10 +1017,23 @@
     %+  turn  ~(tap by v)
     |=  [name=@t tags=(set @tas) color=@t]
     ^-  json
+    =/  svc  (~(get by sv) name)
     %-  pairs:enjs:format
     :~  name+s+name
         tags+[%a (turn ~(tap in tags) |=(t=@tas s+(crip (trip t))))]
         color+s+color
+        :-  %shared
+        ?~  svc  ~
+        %-  pairs:enjs:format
+        :~  allowed+[%a (turn ~(tap in allowed.u.svc) |=(p=@p s+(scot %p p)))]
+            :-  %group-flag
+            ?~  group-flag.u.svc  ~
+            =/  gf  u.group-flag.u.svc
+            %-  pairs:enjs:format
+            :~  host+s+(scot %p -.gf)
+                name+s++.gf
+            ==
+        ==
     ==
   ::
   ++  shares-json
@@ -1033,6 +1190,44 @@
     ^-  json
     [%a (turn ~(val by peers) canopy-listing-json)]
   ::
+  ++  shared-views-json
+    |=  *
+    ^-  json
+    :-  %a
+    %+  turn  ~(tap by sv)
+    |=  [name=@t svc=shared-view-config]
+    ^-  json
+    %-  pairs:enjs:format
+    :~  name+s+name
+        allowed+[%a (turn ~(tap in allowed.svc) |=(p=@p s+(scot %p p)))]
+        :-  %group-flag
+        ?~  group-flag.svc  ~
+        =/  gf  u.group-flag.svc
+        %-  pairs:enjs:format
+        :~  host+s+(scot %p -.gf)
+            name+s++.gf
+        ==
+    ==
+  ::
+  ++  gvl-peek-json
+    |=  l=grove-view-listing
+    ^-  json
+    %-  pairs:enjs:format
+    :~  host+s+(scot %p host.l)
+        name+s+name.l
+        tags+a+(turn tags.l |=(t=tag s+(crip (trip t))))
+        color+s+color.l
+        files+a+(turn files.l file-meta-json)
+    ==
+  ::
+  ++  shared-view-peers-json
+    |=  *
+    ^-  json
+    :-  %a
+    %+  turn  ~(tap by sv-peers)
+    |=  [k=[@p @t] lst=grove-view-listing]
+    (gvl-peek-json lst)
+  ::
   ++  canopy-search-json
     |=  term=@t
     ^-  json
@@ -1104,6 +1299,45 @@
         [%give %kick ~ ~]
     ==
   ::
+      [%shared-view @ ~]
+    =/  nm=@t  i.t.path
+    =/  svc  (~(get by sv) nm)
+    ?~  svc
+      :_  this
+      [%give %kick ~ ~]~
+    =/  src-in-sv-group=?
+      ?~  group-flag.u.svc  %.n
+      =/  gf  u.group-flag.u.svc
+      =/  res=(unit json)
+        (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
+      ?~  res  %.n
+      ?.  ?=([%o *] u.res)  %.n
+      =/  fl  (~(get by p.u.res) 'fleet')
+      ?~  fl  %.n
+      ?.  ?=([%o *] u.fl)  %.n
+      (~(has by p.u.fl) (scot %p src.bowl))
+    =/  ok=?
+      ?|  =(our.bowl src.bowl)
+          (~(has in allowed.u.svc) src.bowl)
+          src-in-sv-group
+      ==
+    ?.  ok
+      :_  this
+      [%give %kick ~ ~]~
+    =/  vw  (~(get by v) nm)
+    ?~  vw
+      :_  this
+      [%give %kick ~ ~]~
+    =/  tgs=(set tag)  -.u.vw
+    =/  clr=@t  +.u.vw
+    =/  matching=(list file-meta)
+      (skim ~(val by f) |=(m=file-meta =(tgs (~(int in tags.m) tgs))))
+    =/  lst=grove-view-listing
+      [host=our.bowl name=nm tags=~(tap in tgs) color=clr files=matching]
+    :_  this
+    :~  [%give %fact ~ %grove-view-listing !>(`grove-view-listing`lst)]
+    ==
+  ::
       [%canopy ~]
     =/  ok=?
       ?-  mode.cfg
@@ -1158,6 +1392,52 @@
       =/  lst  !<(canopy-listing q.cage.sign)
       :_  this(peers (~(put by peers) who lst))
       [%give %fact ~[/updates] %grove-update !>(`update`[%canopy-peer-updated lst])]~
+    ==
+  ::
+      [%sv-sub @ @ ~]
+    =/  who=@p   (slav %p i.t.wire)
+    =/  nm=@t    i.t.t.wire
+    =/  k=[@p @t]  [who nm]
+    ?+  -.sign  (on-agent:def wire sign)
+        %watch-ack
+      ?~  p.sign
+        :_  this(sv-subs (~(put by sv-subs) k %.y))
+        ~
+      :_  this(sv-subs (~(del by sv-subs) k), sv-peers (~(del by sv-peers) k))
+      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewRemoved' host+s+(scot %p who) name+s+nm]))]~
+    ::
+        %kick
+      :_  this(sv-subs (~(del by sv-subs) k), sv-peers (~(del by sv-peers) k))
+      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewRemoved' host+s+(scot %p who) name+s+nm]))]~
+    ::
+        %fact
+      ?.  =(p.cage.sign %grove-view-listing)
+        (on-agent:def wire sign)
+      =/  lst  !<(grove-view-listing q.cage.sign)
+      =/  gvl-j=json
+        %-  pairs:enjs:format
+        :~  host+s+(scot %p host.lst)
+            name+s+name.lst
+            tags+a+(turn tags.lst |=(t=tag s+(crip (trip t))))
+            color+s+color.lst
+            :-  %files
+            :-  %a
+            %+  turn  files.lst
+            |=  m=file-meta
+            %-  pairs:enjs:format
+            :~  id+s+(scot %uv id.m)
+                name+s+name.m
+                file-mark+s+file-mark.m
+                size+(numb:enjs:format size.m)
+                tags+a+(turn ~(tap in tags.m) |=(t=@tas s+t))
+                created+s+(scot %da created.m)
+                modified+s+(scot %da modified.m)
+                description+s+description.m
+                starred+b+starred.m
+            ==
+        ==
+      :_  this(sv-peers (~(put by sv-peers) k lst))
+      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewUpdated' listing+gvl-j]))]~
     ==
   ::
       [%fetch @ @ ~]

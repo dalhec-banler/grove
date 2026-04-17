@@ -54,6 +54,10 @@
           set-canopy-group+(ot ~[flag+parse-group-flag])
           subscribe-to+(ot ~[who+parse-ship])
           unsubscribe-from+(ot ~[who+parse-ship])
+          share-view+(ot ~[name+so allowed+parse-ships group-flag+parse-group-flag])
+          unshare-view+(ot ~[name+so])
+          subscribe-view+(ot ~[who+parse-ship name+so])
+          unsubscribe-view+(ot ~[who+parse-ship name+so])
       ==
     ++  parse-group-flag
       |=  jon=json

@@ -13,32 +13,32 @@ const files: FileMeta[] = [
 
 describe('FileList', () => {
   it('renders file names', () => {
-    render(<FileList files={files} activeId={null} onSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
+    render(<FileList files={files} activeId={null} selectedIds={new Set()} onSelect={vi.fn()} onToggleSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText('photo.png')).toBeTruthy();
   });
 
   it('shows empty state when no files', () => {
-    render(<FileList files={[]} activeId={null} onSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
+    render(<FileList files={[]} activeId={null} selectedIds={new Set()} onSelect={vi.fn()} onToggleSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText(/No files here/)).toBeTruthy();
   });
 
   it('calls onToggleStar when star button clicked', () => {
     const onToggleStar = vi.fn();
-    render(<FileList files={files} activeId={null} onSelect={vi.fn()} onToggleStar={onToggleStar} onShare={vi.fn()} onDelete={vi.fn()} />);
+    render(<FileList files={files} activeId={null} selectedIds={new Set()} onSelect={vi.fn()} onToggleSelect={vi.fn()} onToggleStar={onToggleStar} onShare={vi.fn()} onDelete={vi.fn()} />);
     fireEvent.click(screen.getAllByTitle('Unstar')[0]);
     expect(onToggleStar).toHaveBeenCalledWith('f1');
   });
 
   it('calls onDelete when delete button clicked', () => {
     const onDelete = vi.fn();
-    render(<FileList files={files} activeId={null} onSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={onDelete} />);
+    render(<FileList files={files} activeId={null} selectedIds={new Set()} onSelect={vi.fn()} onToggleSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={onDelete} />);
     fireEvent.click(screen.getAllByText('Delete')[0]);
     expect(onDelete).toHaveBeenCalledWith('f1');
   });
 
   it('calls onSelect when row clicked', () => {
     const onSelect = vi.fn();
-    render(<FileList files={files} activeId={null} onSelect={onSelect} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
+    render(<FileList files={files} activeId={null} selectedIds={new Set()} onSelect={onSelect} onToggleSelect={vi.fn()} onToggleStar={vi.fn()} onShare={vi.fn()} onDelete={vi.fn()} />);
     fireEvent.click(screen.getAllByText('photo.png')[0]);
     expect(onSelect).toHaveBeenCalledWith('f1');
   });
