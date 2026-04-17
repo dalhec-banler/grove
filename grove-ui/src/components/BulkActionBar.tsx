@@ -2,13 +2,20 @@ interface Props {
   count: number;
   onDelete: () => void;
   onTag: () => void;
+  onDownload: () => void;
   onClear: () => void;
 }
 
-export default function BulkActionBar({ count, onDelete, onTag, onClear }: Props) {
+export default function BulkActionBar({ count, onDelete, onTag, onDownload, onClear }: Props) {
   return (
     <div className="flex-1 flex items-center gap-3 min-w-0">
       <span className="text-sm font-medium text-accent whitespace-nowrap">{count} selected</span>
+      <button
+        onClick={onDownload}
+        className="text-xs px-3 py-1.5 rounded border border-border text-muted hover:text-ink hover:bg-bg whitespace-nowrap"
+      >
+        Download
+      </button>
       <button
         onClick={onTag}
         className="text-xs px-3 py-1.5 rounded border border-border text-muted hover:text-ink hover:bg-bg whitespace-nowrap"

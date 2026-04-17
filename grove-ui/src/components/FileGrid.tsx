@@ -17,13 +17,14 @@ interface Props {
   onToggleStar: (id: string) => void;
   onShare: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenViewer?: (id: string) => void;
 }
 
 interface MarqueeRect { x: number; y: number; width: number; height: number }
 
 export default function FileGrid({
   files, activeId, selectedIds, onSelect, onToggleSelect, onRangeSelect, onBatchSelect,
-  onToggleStar, onShare, onDelete,
+  onToggleStar, onShare, onDelete, onOpenViewer,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -170,6 +171,7 @@ export default function FileGrid({
             selected={selectedIds.has(f.id)}
             focused={focusIndex === i}
             onClick={(e) => handleCardClick(f.id, i, e)}
+            onOpenViewer={onOpenViewer ? () => onOpenViewer(f.id) : undefined}
             onToggleSelect={() => { setFocusIndex(i); onToggleSelect(f.id); }}
             onToggleStar={() => onToggleStar(f.id)}
             onShare={() => onShare(f.id)}
@@ -191,9 +193,9 @@ export default function FileGrid({
   );
 }
 
-function Card({ file, active, selected, focused, onClick, onToggleSelect, onToggleStar, onShare, onDelete, onDragStart }: {
+function Card({ file, active, selected, focused, onClick, onOpenViewer, onToggleSelect, onToggleStar, onShare, onDelete, onDragStart }: {
   file: FileMeta; active: boolean; selected: boolean; focused: boolean;
-  onClick: (e: React.MouseEvent) => void; onToggleSelect: () => void;
+  onClick: (e: React.MouseEvent) => void; onOpenViewer?: () => void; onToggleSelect: () => void;
   onToggleStar: () => void; onShare: () => void; onDelete: () => void;
   onDragStart: (e: React.DragEvent) => void;
 }) {
@@ -202,7 +204,6 @@ function Card({ file, active, selected, focused, onClick, onToggleSelect, onTogg
       data-file-id={file.id}
       draggable
       onDragStart={onDragStart}
-      onClick={onClick}
       className={`group relative rounded-lg border bg-surface cursor-pointer overflow-hidden ${
         selected ? 'border-accent ring-2 ring-accent/30'
         : active ? 'border-accent ring-2 ring-accent-soft'
@@ -210,10 +211,17 @@ function Card({ file, active, selected, focused, onClick, onToggleSelect, onTogg
         : 'border-border hover:border-ink/20'
       }`}
     >
-      <div className="aspect-square bg-bg flex items-center justify-center overflow-hidden">
+      <div
+        className="aspect-square bg-bg flex items-center justify-center overflow-hidden"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onOpenViewer) onOpenViewer();
+          else onClick(e);
+        }}
+      >
         <Thumb mark={file.fileMark} src={fileUrl(file.id)} size="fill" />
       </div>
-      <div className="p-2">
+      <div className="p-2" onClick={onClick}>
         <div className="flex items-center gap-1.5">
           <input
             type="checkbox"

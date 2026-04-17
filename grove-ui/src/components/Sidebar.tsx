@@ -30,8 +30,7 @@ export default function Sidebar({
   const [viewsOpen, setViewsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
   const [subsOpen, setSubsOpen] = useState(true);
-  const [sharedOpen, setSharedOpen] = useState(true);
-  const [svSubsOpen, setSvSubsOpen] = useState(true);
+  // sharedOpen removed – sub-items appear when a shared section is selected
   const [tagFilter, setTagFilter] = useState('');
 
   const filteredTags = tagCounts.filter(([t]) =>
@@ -64,6 +63,7 @@ export default function Sidebar({
             count={counts.starred}
             active={selection.kind === 'starred'}
             onClick={() => onSelect({ kind: 'starred' })}
+            muted
           />
 
           <SectionHeader
@@ -72,6 +72,7 @@ export default function Sidebar({
             onToggle={() => setViewsOpen(!viewsOpen)}
             onAdd={onNewView}
             addTitle="New view"
+            tooltip="Filtered collections — files matching all selected tags"
           />
           {viewsOpen && (
             <div className="mt-1">
@@ -128,60 +129,56 @@ export default function Sidebar({
             </div>
           )}
 
-          <SectionHeader
-            label="Shared with me"
-            open={sharedOpen}
-            onToggle={() => setSharedOpen(!sharedOpen)}
-          />
-          {sharedOpen && (
-            <div className="mt-1">
-              <button
-                onClick={() => onSelect({ kind: 'inbox' })}
-                className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${
-                  selection.kind === 'inbox' ? 'bg-accent-soft text-accent font-medium' : 'text-ink hover:bg-bg'
-                }`}
-              >
-                <span className="truncate">Files</span>
-                <span className="flex items-center gap-1.5 ml-2">
-                  {counts.inboxPending > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{counts.inboxPending}</span>
-                  )}
-                  <span className="text-xs text-faint">{counts.inbox}</span>
-                </span>
-              </button>
-              <SidebarItem
-                label="Shared Views"
-                count={svList.length}
-                active={selection.kind === 'shared-views'}
-                onClick={() => onSelect({ kind: 'shared-views' })}
-              />
-              {svList.length > 0 && (
-                <SectionHeader
-                  label={`Subscriptions (${svList.length})`}
-                  open={svSubsOpen}
-                  onToggle={() => setSvSubsOpen(!svSubsOpen)}
-                  small
+          {(() => {
+            const isSharedSection = selection.kind === 'inbox' || selection.kind === 'shared-views' || selection.kind === 'shared-view';
+            return (
+              <div className="mt-4">
+                <SidebarItem
+                  label="Shared with me"
+                  count={counts.inbox + svList.length}
+                  active={isSharedSection}
+                  onClick={() => onSelect({ kind: 'inbox' })}
+                  badge={counts.inboxPending}
+                  tooltip="Files and views that others have shared with you"
                 />
-              )}
-              {svSubsOpen && svList.map((sv) => (
-                <SharedViewSubItem
-                  key={`${sv.host}/${sv.name}`}
-                  listing={sv}
-                  active={selection.kind === 'shared-view' && selection.host === sv.host && selection.name === sv.name}
-                  onClick={() => onSelect({ kind: 'shared-view', host: sv.host, name: sv.name })}
-                  onUnsubscribe={() => {
-                    if (confirm(`Unsubscribe from ${sv.name} on ${sv.host}?`)) onUnsubscribeSharedView(sv.host, sv.name);
-                  }}
-                />
-              ))}
-            </div>
-          )}
+                {isSharedSection && (
+                  <div>
+                    <ClickableSectionHeader
+                      label="All Files"
+                      count={counts.inbox}
+                      active={selection.kind === 'inbox'}
+                      onClick={() => onSelect({ kind: 'inbox' })}
+                      tooltip="Files shared directly with you by other ships"
+                    />
+                    <ClickableSectionHeader
+                      label="Shared Views"
+                      count={svList.length}
+                      active={selection.kind === 'shared-views' || selection.kind === 'shared-view'}
+                      onClick={() => onSelect({ kind: 'shared-views' })}
+                      tooltip="Filtered collections shared with you by other ships"
+                    />
+                    {svList.length > 0 && svList.map((sv) => (
+                      <SharedViewSubItem
+                        key={`${sv.host}/${sv.name}`}
+                        listing={sv}
+                        active={selection.kind === 'shared-view' && selection.host === sv.host && selection.name === sv.name}
+                        onClick={() => onSelect({ kind: 'shared-view', host: sv.host, name: sv.name })}
+                        onUnsubscribe={() => {
+                          if (confirm(`Unsubscribe from ${sv.name} on ${sv.host}?`)) onUnsubscribeSharedView(sv.host, sv.name);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="border-t border-border">
           <div className="h-12 flex items-center gap-2 px-4 border-b border-border">
             <div className="w-7 h-7 rounded-md bg-canopy flex items-center justify-center text-white text-sm font-semibold">C</div>
-            <div className="font-medium leading-tight text-sm">Canopy</div>
+            <div className="font-medium leading-tight text-sm" title="Your public file feed that others can browse and subscribe to">Canopy</div>
           </div>
 
           <div className="py-2">
@@ -192,6 +189,7 @@ export default function Sidebar({
               onClick={() => onSelect({ kind: 'canopy-mine' })}
               tint="canopy"
               onFileDrop={onDropOnCanopy}
+              tooltip="Files you've published for others to see"
             />
             <button
               onClick={() => onSelect({ kind: 'canopy-browse' })}
@@ -223,10 +221,10 @@ export default function Sidebar({
   );
 }
 
-function SectionHeader({ label, open, onToggle, onAdd, addTitle, small }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; addTitle?: string; small?: boolean }) {
+function SectionHeader({ label, open, onToggle, onAdd, addTitle, small, tooltip }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; addTitle?: string; small?: boolean; tooltip?: string }) {
   return (
     <div className={`${small ? 'mt-2 mb-0.5' : 'mt-5'} px-4 flex items-center justify-between text-xs text-muted uppercase tracking-wider`}>
-      <button onClick={onToggle} className="flex items-center gap-1 hover:text-ink">
+      <button onClick={onToggle} className="flex items-center gap-1 hover:text-ink" title={tooltip}>
         <span className="inline-block w-3 text-center">{open ? '▾' : '▸'}</span>
         {small ? <span className="text-[10px]">{label}</span> : label}
       </button>
@@ -237,9 +235,26 @@ function SectionHeader({ label, open, onToggle, onAdd, addTitle, small }: { labe
   );
 }
 
-function SidebarItem({ label, count, active, onClick, tint, onFileDrop }: {
+function ClickableSectionHeader({ label, count, active, onClick, tooltip }: {
+  label: string; count: number; active: boolean; onClick: () => void; tooltip?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={tooltip}
+      className={`w-full px-4 py-1 flex items-center justify-between text-xs uppercase tracking-wider ${
+        active ? 'text-accent font-medium' : 'text-muted hover:text-ink'
+      }`}
+    >
+      <span>{label}</span>
+      <span className="text-[10px] text-faint normal-case">{count}</span>
+    </button>
+  );
+}
+
+function SidebarItem({ label, count, active, onClick, tint, muted, badge, onFileDrop, tooltip }: {
   label: string; count: number; active: boolean; onClick: () => void;
-  tint?: 'accent' | 'canopy'; onFileDrop?: (ids: string[]) => void;
+  tint?: 'accent' | 'canopy'; muted?: boolean; badge?: number; onFileDrop?: (ids: string[]) => void; tooltip?: string;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const c = tint ?? 'accent';
@@ -248,11 +263,12 @@ function SidebarItem({ label, count, active, onClick, tint, onFileDrop }: {
     ? c === 'canopy' ? 'bg-canopy-soft ring-2 ring-canopy text-canopy font-medium' : 'bg-accent-soft ring-2 ring-accent text-accent font-medium'
     : active
     ? c === 'canopy' ? 'bg-canopy-soft text-canopy font-medium' : 'bg-accent-soft text-accent font-medium'
-    : 'text-ink hover:bg-bg';
+    : muted ? 'text-muted hover:bg-bg' : 'text-ink hover:bg-bg';
 
   return (
     <button
       onClick={onClick}
+      title={tooltip}
       onDragOver={onFileDrop ? (e) => {
         if (!isGroveDrag(e)) return;
         e.preventDefault();
@@ -273,7 +289,12 @@ function SidebarItem({ label, count, active, onClick, tint, onFileDrop }: {
       className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${cls}`}
     >
       <span className="truncate">{label}</span>
-      <span className="text-xs text-faint ml-2">{count}</span>
+      <span className="flex items-center gap-2 ml-2">
+        {badge != null && badge > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{badge}</span>
+        )}
+        <span className="text-xs text-faint">{count}</span>
+      </span>
     </button>
   );
 }

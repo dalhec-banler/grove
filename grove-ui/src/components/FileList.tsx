@@ -16,11 +16,12 @@ interface Props {
   onToggleStar: (id: string) => void;
   onShare: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenViewer?: (id: string) => void;
 }
 
 export default function FileList({
   files, activeId, selectedIds, onSelect, onToggleSelect, onRangeSelect, onBatchSelect,
-  onToggleStar, onShare, onDelete,
+  onToggleStar, onShare, onDelete, onOpenViewer,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState(-1);
@@ -137,7 +138,12 @@ export default function FileList({
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Thumb mark={f.fileMark} src={fileUrl(f.id)} size="sm" />
+                    <span
+                      className={onOpenViewer ? 'cursor-pointer hover:opacity-80' : ''}
+                      onClick={onOpenViewer ? (e) => { e.stopPropagation(); onOpenViewer(f.id); } : undefined}
+                    >
+                      <Thumb mark={f.fileMark} src={fileUrl(f.id)} size="sm" />
+                    </span>
                     <span className="truncate">{f.name}</span>
                   </div>
                 </td>

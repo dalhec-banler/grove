@@ -21,6 +21,10 @@ import CanopyView from './components/CanopyView';
 import ToolbarControls from './components/ToolbarControls';
 import PublishModal from './components/PublishModal';
 import SharedViewsView from './components/SharedViewsView';
+import Lightbox from './components/Lightbox';
+import PdfViewer from './components/PdfViewer';
+import { IMAGE_MARKS } from './format';
+import { fileUrl } from './urls';
 
 export default function App() {
   const isUploadingRef = useRef(false);
@@ -43,6 +47,8 @@ export default function App() {
   const [publishingFile, setPublishingFile] = useState<FileMeta | null>(null);
   const [bulkTagForSelection, setBulkTagForSelection] = useState<string[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [lightboxFileId, setLightboxFileId] = useState<string | null>(null);
+  const [pdfViewerFileId, setPdfViewerFileId] = useState<string | null>(null);
 
   const fileToolbar = useToolbarState('newest', () =>
     parseViewMode(localStorage.getItem('grove:viewMode') ?? 'grid')
@@ -80,6 +86,24 @@ export default function App() {
     for (const sh of shares.values()) if (sh.fileId === activeFile.id) return sh;
     return null;
   }, [activeFile, shares]);
+
+  const lightboxFile = lightboxFileId ? files.get(lightboxFileId) ?? null : null;
+  const pdfViewerFile = pdfViewerFileId ? files.get(pdfViewerFileId) ?? null : null;
+
+  const lightboxImages = useMemo(
+    () => visibleFiles.filter((f) => IMAGE_MARKS.has(f.fileMark.toLowerCase())),
+    [visibleFiles],
+  );
+
+  const openViewer = useCallback((id: string) => {
+    const file = files.get(id);
+    if (!file) return;
+    if (IMAGE_MARKS.has(file.fileMark.toLowerCase())) {
+      setLightboxFileId(id);
+    } else if (file.fileMark.toLowerCase() === 'pdf') {
+      setPdfViewerFileId(id);
+    }
+  }, [files]);
 
   const openShareFor = useCallback((fileId: string) => {
     for (const sh of shares.values()) {
@@ -128,6 +152,19 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const bulkDownload = useCallback(() => {
+    for (const id of selectedIds) {
+      const file = files.get(id);
+      if (!file) continue;
+      const a = document.createElement('a');
+      a.href = fileUrl(id);
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  }, [selectedIds, files]);
 
   const bulkDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -278,6 +315,7 @@ export default function App() {
             <BulkActionBar
               count={selectedIds.size}
               onDelete={bulkDelete}
+              onDownload={bulkDownload}
               onTag={() => setBulkTagForSelection(Array.from(selectedIds))}
               onClear={() => { setSelectedIds(new Set()); setAnchorId(null); }}
             />
@@ -375,6 +413,7 @@ export default function App() {
                 onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
                 onShare={openShareFor}
                 onDelete={deleteFile}
+                onOpenViewer={openViewer}
               />
             ) : (
               <FileGrid
@@ -388,6 +427,7 @@ export default function App() {
                 onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
                 onShare={openShareFor}
                 onDelete={deleteFile}
+                onOpenViewer={openViewer}
               />
             )}
           </div>
@@ -483,6 +523,20 @@ export default function App() {
             }
             setBulkTagForSelection(null);
           }}
+        />
+      )}
+      {lightboxFile && (
+        <Lightbox
+          file={lightboxFile}
+          files={lightboxImages}
+          onNavigate={(f) => setLightboxFileId(f.id)}
+          onClose={() => setLightboxFileId(null)}
+        />
+      )}
+      {pdfViewerFile && (
+        <PdfViewer
+          file={pdfViewerFile}
+          onClose={() => setPdfViewerFileId(null)}
         />
       )}
       {toast && (

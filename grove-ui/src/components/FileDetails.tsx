@@ -131,7 +131,7 @@ export default function FileDetails({ file, share, published, onClose, onRename,
               else if (share) onUnshare(share.token);
             }}
           />
-          <span>Public link</span>
+          <span title="Anyone with this link can download this file">Public link</span>
         </label>
         {share && (
           <div className="space-y-1">
@@ -143,7 +143,7 @@ export default function FileDetails({ file, share, published, onClose, onRename,
       </div>
 
       <div className="p-4 border-b border-border">
-        <div className="text-xs text-muted uppercase tracking-wider mb-2">Canopy</div>
+        <div className="text-xs text-muted uppercase tracking-wider mb-2" title="Your public file feed that others can browse and subscribe to">Canopy</div>
         {published ? (
           <div className="space-y-2">
             <div className="text-xs text-ink flex items-center gap-2">
@@ -164,7 +164,7 @@ export default function FileDetails({ file, share, published, onClose, onRename,
       </div>
 
       <div className="p-4 border-b border-border">
-        <div className="text-xs text-muted uppercase tracking-wider mb-2">Allowed ships</div>
+        <div className="text-xs text-muted uppercase tracking-wider mb-2" title="Ships that can access this file directly, without a public link">Allowed ships</div>
         <div className="flex flex-wrap gap-1 mb-2">
           {file.allowed.map((s) => (
             <ShipChip key={s} ship={s} onRemove={() => removeShip(s)} />
