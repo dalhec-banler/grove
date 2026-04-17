@@ -59,7 +59,6 @@
       |=  jon=json
       ^-  (unit [ship term])
       ?~  jon  ~
-      ?:  ?=([%~ ~] jon)  ~
       %-  some
       %.  jon
       (ot ~[host+parse-ship name+parse-tag])

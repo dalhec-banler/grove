@@ -145,6 +145,13 @@
       :~  ['mode' s+(crip (trip mode.c))]
           ['name' s+name.c]
           ['friends' [%a (turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))]]
+          :-  'group-flag'
+          ?~  group-flag.c  ~
+          =/  gf  u.group-flag.c
+          %-  pairs
+          :~  ['host' s+(scot %p -.gf)]
+              ['name' s++.gf]
+          ==
       ==
     ::
     ++  canopy-listing-json

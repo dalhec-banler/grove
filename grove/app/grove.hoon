@@ -473,7 +473,209 @@
   ++  fact-update
     |=  u=update
     ^-  (list card)
-    [%give %fact ~[/updates] %grove-update !>(u)]~
+    [%give %fact ~[/updates] %json !>((update-json u))]~
+  ::
+  ++  update-json
+    |=  u=update
+    ^-  json
+    =,  enjs:format
+    ?-  -.u
+        %file-added     (fm-upd-json 'fileAdded' file-meta.u)
+        %file-updated   (fm-upd-json 'fileUpdated' file-meta.u)
+    ::
+        %file-removed
+      %-  pairs
+      :~  type+s+'fileRemoved'
+          ['fileId' s+(scot %uv id.u)]
+      ==
+    ::
+        %view-added
+      %-  pairs
+      :~  type+s+'viewAdded'
+          name+s+name.u
+          tags+a+(turn ~(tap in tags.u) |=(t=@tas s+t))
+          color+s+color.u
+      ==
+    ::
+        %view-removed
+      %-  pairs
+      :~  type+s+'viewRemoved'
+          name+s+name.u
+      ==
+    ::
+        %share-added
+      %-  pairs
+      :~  type+s+'shareAdded'
+          token+s+(scot %uv token.u)
+          ['fileId' s+(scot %uv id.u)]
+      ==
+    ::
+        %share-removed
+      %-  pairs
+      :~  type+s+'shareRemoved'
+          token+s+(scot %uv token.u)
+      ==
+    ::
+        %allowed-updated
+      %-  pairs
+      :~  type+s+'allowedUpdated'
+          ['fileId' s+(scot %uv id.u)]
+          ships+a+(turn ~(tap in ships.u) |=(p=@p s+(scot %p p)))
+      ==
+    ::
+        %inbox-added
+      %-  pairs
+      :~  type+s+'inboxAdded'
+          entry+(ie-json entry.u)
+      ==
+    ::
+        %inbox-updated
+      %-  pairs
+      :~  type+s+'inboxUpdated'
+          entry+(ie-json entry.u)
+      ==
+    ::
+        %inbox-removed
+      %-  pairs
+      :~  type+s+'inboxRemoved'
+          owner+s+(scot %p owner.u)
+          ['fileId' s+(scot %uv id.u)]
+      ==
+    ::
+        %trusted-updated
+      %-  pairs
+      :~  type+s+'trustedUpdated'
+          trusted+a+(turn ~(tap in trusted.u) |=(p=@p s+(scot %p p)))
+          blocked+a+(turn ~(tap in blocked.u) |=(p=@p s+(scot %p p)))
+      ==
+    ::
+        %cache-updated
+      %-  pairs
+      :~  type+s+'cacheUpdated'
+          owner+s+(scot %p owner.u)
+          meta+(fm-json file-meta.u)
+      ==
+    ::
+        %cache-removed
+      %-  pairs
+      :~  type+s+'cacheRemoved'
+          owner+s+(scot %p owner.u)
+          ['fileId' s+(scot %uv id.u)]
+      ==
+    ::
+        %canopy-entry-added
+      %-  pairs
+      :~  type+s+'canopyEntryAdded'
+          entry+(ce-upd-json canopy-entry.u)
+      ==
+    ::
+        %canopy-entry-removed
+      %-  pairs
+      :~  type+s+'canopyEntryRemoved'
+          ['fileId' s+(scot %uv id.u)]
+      ==
+    ::
+        %canopy-config-updated
+      %-  pairs
+      :~  type+s+'canopyConfigUpdated'
+          config+(cc-upd-json canopy-config.u)
+      ==
+    ::
+        %canopy-peer-updated
+      %-  pairs
+      :~  type+s+'canopyPeerUpdated'
+          listing+(cl-upd-json canopy-listing.u)
+      ==
+    ::
+        %canopy-peer-removed
+      %-  pairs
+      :~  type+s+'canopyPeerRemoved'
+          host+s+(scot %p host.u)
+      ==
+    ==
+  ::
+  ++  fm-upd-json
+    |=  [typ=@t m=file-meta]
+    ^-  json
+    %-  pairs:enjs:format
+    :~  type+s+typ
+        ['fileId' s+(scot %uv id.m)]
+        name+s+name.m
+        ['fileMark' s+(crip (trip file-mark.m))]
+        size+(numb:enjs:format size.m)
+        tags+a+(turn ~(tap in tags.m) |=(t=@tas s+t))
+        created+s+(scot %da created.m)
+        modified+s+(scot %da modified.m)
+        description+s+description.m
+        starred+b+starred.m
+    ==
+  ::
+  ++  fm-json
+    |=  m=file-meta
+    ^-  json
+    %-  pairs:enjs:format
+    :~  id+s+(scot %uv id.m)
+        name+s+name.m
+        file-mark+s+file-mark.m
+        size+(numb:enjs:format size.m)
+        tags+a+(turn ~(tap in tags.m) |=(t=@tas s+t))
+        created+s+(scot %da created.m)
+        modified+s+(scot %da modified.m)
+        description+s+description.m
+        starred+b+starred.m
+    ==
+  ::
+  ++  ie-json
+    |=  e=inbox-entry
+    ^-  json
+    %-  pairs:enjs:format
+    :~  owner+s+(scot %p owner.e)
+        ['fileId' s+(scot %uv id.e)]
+        name+s+name.e
+        ['fileMark' s+(crip (trip file-mark.e))]
+        size+(numb:enjs:format size.e)
+        offered+s+(scot %da offered.e)
+        accepted+b+accepted.e
+    ==
+  ::
+  ++  ce-upd-json
+    |=  e=canopy-entry
+    ^-  json
+    %-  pairs:enjs:format
+    :~  id+s+(scot %uv id.e)
+        ['displayName' s+display-name.e]
+        ['fileMark' s+(crip (trip file-mark.e))]
+        size+(numb:enjs:format size.e)
+        tags+a+(turn ~(tap in tags.e) |=(t=@tas s+t))
+        published+s+(scot %da published.e)
+        description+s+description.e
+    ==
+  ::
+  ++  cc-upd-json
+    |=  c=canopy-config
+    ^-  json
+    %-  pairs:enjs:format
+    :~  mode+s+(crip (trip mode.c))
+        name+s+name.c
+        friends+a+(turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))
+        :-  %group-flag
+        ?~  group-flag.c  ~
+        =/  gf  u.group-flag.c
+        %-  pairs:enjs:format
+        :~  host+s+(scot %p -.gf)
+            name+s++.gf
+        ==
+    ==
+  ::
+  ++  cl-upd-json
+    |=  l=canopy-listing
+    ^-  json
+    %-  pairs:enjs:format
+    :~  host+s+(scot %p host.l)
+        name+s+name.l
+        mode+s+(crip (trip mode.l))
+        entries+a+(turn entries.l ce-upd-json)
+    ==
   ::
   ++  canopy-listing-from
     |=  st=_state
