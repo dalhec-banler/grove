@@ -102,6 +102,7 @@
       [%unshare-view name=@t]
       [%subscribe-view who=@p name=@t]
       [%unsubscribe-view who=@p name=@t]
+      [%sv-invite host=@p name=@t]
   ==
 ::
 +$  update

@@ -32,7 +32,7 @@ export default function App() {
 
   const {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, availableGroups,
+    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, newSvKeys, setNewSvKeys, availableGroups,
     connected, loadError, setPendingShareFor, shareDialog, setShareDialog,
   } = useGroveData(isUploadingRef, uploadCollectedRef);
 
@@ -66,6 +66,13 @@ export default function App() {
 
   // Clear file selection when navigating to a different section.
   useEffect(() => { setSelectedIds(new Set()); setAnchorId(null); }, [selection]);
+
+  // Clear "new" shared view indicators when user visits that section.
+  useEffect(() => {
+    if (selection.kind === 'shared-views' || selection.kind === 'shared-view') {
+      setNewSvKeys(new Set());
+    }
+  }, [selection, setNewSvKeys]);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -267,6 +274,7 @@ export default function App() {
           inbox: inbox.size,
           inboxPending: Array.from(inbox.values()).filter((e) => !e.accepted).length,
           canopy: canopyEntries.size,
+          newSharedViews: newSvKeys.size,
         }}
         connected={connected}
         shipName={window.ship ?? ''}

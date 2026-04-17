@@ -498,8 +498,17 @@
         %share-view
       ?.  (~(has by v) name.a)  `state
       =/  svc=shared-view-config  [allowed.a group-flag.a]
+      =/  old-svc  (~(get by sv) name.a)
+      =/  old-allowed=(set @p)
+        ?~  old-svc  ~
+        allowed.u.old-svc
+      =/  new-ships=(set @p)  (~(dif in allowed.a) old-allowed)
       =/  new-state  state(sv (~(put by sv) name.a svc))
-      :-  (weld (fact-update [%view-shared name.a allowed.a group-flag.a]) (sv-broadcast-all new-state))
+      =/  invite-cards=(list card)
+        %+  turn  ~(tap in new-ships)
+        |=  who=@p
+        [%pass /sv-invite/(scot %p who)/(scot %tas name.a) %agent [who %grove] %poke %grove-action !>(`action`[%sv-invite our.bowl name.a])]
+      :-  :(weld (fact-update [%view-shared name.a allowed.a group-flag.a]) (sv-broadcast-all new-state) invite-cards)
       new-state
     ::
         %unshare-view
@@ -513,6 +522,14 @@
       =/  wire=path  /sv-sub/(scot %p who.a)/(scot %tas name.a)
       :_  state
       :~  [%pass wire %agent [who.a %grove] %watch /shared-view/(scot %tas name.a)]
+      ==
+    ::
+        %sv-invite
+      =/  k=[@p @t]  [host.a name.a]
+      ?:  (~(has by sv-subs) k)  `state
+      =/  wire=path  /sv-sub/(scot %p host.a)/(scot %tas name.a)
+      :_  state
+      :~  [%pass wire %agent [host.a %grove] %watch /shared-view/(scot %tas name.a)]
       ==
     ::
         %unsubscribe-view
@@ -832,16 +849,10 @@
   ++  dm-notify
     |=  [target=@p tk=share-token fname=@t]
     ^-  card
-    =/  host-tape=tape  (slag 1 (trip (scot %p our.bowl)))
-    =/  url-tape=tape
-      ;:  weld
-        "https://"  host-tape  ".tlon.network/grove-share/"
-        (trip (scot %uv tk))  "/"  (trip fname)
-      ==
     =/  msg-tape=tape
       ;:  weld
         (trip (scot %p our.bowl))  " shared '"  (trip fname)
-        "' via Grove: "  url-tape
+        "' with you via Grove. Open Grove on their ship to download it."
       ==
     =/  msg=@t  (crip msg-tape)
     =/  sent=@da  now.bowl

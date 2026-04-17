@@ -123,6 +123,60 @@
       :~  ['type' s+'canopyPeerRemoved']
           ['host' s+(scot %p host.upd)]
       ==
+    ::
+        %view-shared
+      %-  pairs
+      :~  ['type' s+'viewShared']
+          ['name' s+name.upd]
+          ['allowed' [%a (turn ~(tap in allowed.upd) |=(p=@p s+(scot %p p)))]]
+          :-  'group-flag'
+          ?~  group-flag.upd  ~
+          =/  gf  u.group-flag.upd
+          %-  pairs
+          :~  ['host' s+(scot %p -.gf)]
+              ['name' s++.gf]
+          ==
+      ==
+    ::
+        %view-unshared
+      %-  pairs
+      :~  ['type' s+'viewUnshared']
+          ['name' s+name.upd]
+      ==
+    ::
+        %shared-view-updated
+      %-  pairs
+      :~  ['type' s+'sharedViewUpdated']
+          :-  'listing'
+          %-  pairs
+          :~  ['host' s+(scot %p host.grove-view-listing.upd)]
+              ['name' s+name.grove-view-listing.upd]
+              ['tags' [%a (turn tags.grove-view-listing.upd |=(t=tag s+(crip (trip t))))]]
+              ['color' s+color.grove-view-listing.upd]
+              :-  'files'
+              :-  %a
+              %+  turn  files.grove-view-listing.upd
+              |=  m=file-meta
+              %-  pairs
+              :~  ['id' s+(scot %uv id.m)]
+                  ['name' s+name.m]
+                  ['fileMark' s+(crip (trip file-mark.m))]
+                  ['size' (numb size.m)]
+                  ['tags' [%a (turn ~(tap in tags.m) |=(t=@tas s+(crip (trip t))))]]
+                  ['created' s+(scot %da created.m)]
+                  ['modified' s+(scot %da modified.m)]
+                  ['description' s+description.m]
+                  ['starred' b+starred.m]
+              ==
+          ==
+      ==
+    ::
+        %shared-view-removed
+      %-  pairs
+      :~  ['type' s+'sharedViewRemoved']
+          ['host' s+(scot %p host.upd)]
+          ['name' s+name.upd]
+      ==
     ==
     ::
     ++  canopy-entry-json

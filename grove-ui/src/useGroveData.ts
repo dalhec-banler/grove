@@ -34,6 +34,9 @@ export function useGroveData(
   const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
   const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
   const [svPeers, setSvPeers] = useState<Map<string, GroveViewListing>>(new Map());
+  const [newSvKeys, setNewSvKeys] = useState<Set<string>>(new Set());
+  const svPeersRef = useRef(svPeers);
+  svPeersRef.current = svPeers;
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingShareFor, setPendingShareFor] = useState<string | null>(null);
@@ -180,12 +183,25 @@ export function useGroveData(
           return mapSet(prev, u.name, rest as View);
         });
         break;
-      case 'sharedViewUpdated':
-        setSvPeers((prev) => mapSet(prev, `${u.listing.host}/${u.listing.name}`, u.listing));
+      case 'sharedViewUpdated': {
+        const key = `${u.listing.host}/${u.listing.name}`;
+        if (!svPeersRef.current.has(key)) {
+          setNewSvKeys((prev) => new Set(prev).add(key));
+        }
+        setSvPeers((prev) => mapSet(prev, key, u.listing));
         break;
-      case 'sharedViewRemoved':
-        setSvPeers((prev) => mapDel(prev, `${u.host}/${u.name}`));
+      }
+      case 'sharedViewRemoved': {
+        const rKey = `${u.host}/${u.name}`;
+        setSvPeers((prev) => mapDel(prev, rKey));
+        setNewSvKeys((prev) => {
+          if (!prev.has(rKey)) return prev;
+          const next = new Set(prev);
+          next.delete(rKey);
+          return next;
+        });
         break;
+      }
     }
   }, [isUploadingRef, uploadCollectedRef]);
 
@@ -203,7 +219,7 @@ export function useGroveData(
 
   return {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, availableGroups,
+    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, newSvKeys, setNewSvKeys, availableGroups,
     connected, loadError, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
   };
 }

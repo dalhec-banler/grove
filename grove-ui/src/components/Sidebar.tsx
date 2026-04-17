@@ -11,7 +11,7 @@ interface Props {
   onNewView: () => void;
   onEditView: (v: View) => void;
   onDeleteView: (v: View) => void;
-  counts: { all: number; starred: number; inbox: number; inboxPending: number; canopy: number };
+  counts: { all: number; starred: number; inbox: number; inboxPending: number; canopy: number; newSharedViews: number };
   connected: boolean;
   shipName: string;
   canopyPeers: string[];
@@ -27,9 +27,9 @@ export default function Sidebar({
   counts, connected, shipName, canopyPeers, onUnsubscribeCanopy,
   onDropOnView, onDropOnCanopy, svPeers, onUnsubscribeSharedView,
 }: Props) {
-  const [viewsOpen, setViewsOpen] = useState(true);
-  const [tagsOpen, setTagsOpen] = useState(true);
-  const [subsOpen, setSubsOpen] = useState(true);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [subsOpen, setSubsOpen] = useState(false);
   // sharedOpen removed – sub-items appear when a shared section is selected
   const [tagFilter, setTagFilter] = useState('');
 
@@ -138,7 +138,7 @@ export default function Sidebar({
                   count={counts.inbox + svList.length}
                   active={isSharedSection}
                   onClick={() => onSelect({ kind: 'inbox' })}
-                  badge={counts.inboxPending}
+                  badge={counts.inboxPending + counts.newSharedViews}
                   tooltip="Files and views that others have shared with you"
                 />
                 {isSharedSection && (
@@ -155,6 +155,7 @@ export default function Sidebar({
                       count={svList.length}
                       active={selection.kind === 'shared-views' || selection.kind === 'shared-view'}
                       onClick={() => onSelect({ kind: 'shared-views' })}
+                      badge={counts.newSharedViews}
                       tooltip="Filtered collections shared with you by other ships"
                     />
                     {svList.length > 0 && svList.map((sv) => (
@@ -235,8 +236,8 @@ function SectionHeader({ label, open, onToggle, onAdd, addTitle, small, tooltip 
   );
 }
 
-function ClickableSectionHeader({ label, count, active, onClick, tooltip }: {
-  label: string; count: number; active: boolean; onClick: () => void; tooltip?: string;
+function ClickableSectionHeader({ label, count, active, onClick, badge, tooltip }: {
+  label: string; count: number; active: boolean; onClick: () => void; badge?: number; tooltip?: string;
 }) {
   return (
     <button
@@ -246,7 +247,12 @@ function ClickableSectionHeader({ label, count, active, onClick, tooltip }: {
         active ? 'text-accent font-medium' : 'text-muted hover:text-ink'
       }`}
     >
-      <span>{label}</span>
+      <span className="flex items-center gap-1.5">
+        {label}
+        {badge != null && badge > 0 && (
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+        )}
+      </span>
       <span className="text-[10px] text-faint normal-case">{count}</span>
     </button>
   );
