@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FileMeta, View, Selection, CanopyMode, SortKey, ViewMode } from './types';
-import { poke, pokeSafe, setErrorHandler } from './api';
+import type { FileMeta, View, Selection } from './types';
+import { poke, pokeSafe, setErrorHandler, notifyError } from './api';
 import { parseViewMode } from './format';
 import { filterAndSortFiles } from './filter';
 import { useGroveData } from './useGroveData';
 import { useUpload } from './useUpload';
+import { useToolbarState } from './useToolbarState';
+import { useInboxActions, useCanopyActions } from './useActions';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
 import FileGrid from './components/FileGrid';
@@ -35,23 +37,21 @@ export default function App() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [editingView, setEditingView] = useState<View | null>(null);
   const [publishingFile, setPublishingFile] = useState<FileMeta | null>(null);
-  const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+  const [toast, setToast] = useState<string | null>(null);
+
+  const fileToolbar = useToolbarState('newest', () =>
     parseViewMode(localStorage.getItem('grove:viewMode') ?? 'grid')
   );
-  const [fileSort, setFileSort] = useState<SortKey>('newest');
-  const [canopySort, setCanopySort] = useState<SortKey>('newest');
-  const [canopyViewMode, setCanopyViewMode] = useState<ViewMode>('list');
-  const [canopySearch, setCanopySearch] = useState('');
-  const [inboxSort, setInboxSort] = useState<SortKey>('newest');
-  const [inboxViewMode, setInboxViewMode] = useState<ViewMode>('list');
-  const [inboxSearch, setInboxSearch] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  const canopyToolbar = useToolbarState('newest', 'list');
+  const inboxToolbar = useToolbarState('newest', 'list');
+
+  const inboxActions = useInboxActions();
+  const canopyActions = useCanopyActions(setSelection);
 
   useEffect(() => {
     setErrorHandler((msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); });
   }, []);
-  useEffect(() => { localStorage.setItem('grove:viewMode', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('grove:viewMode', fileToolbar.viewMode); }, [fileToolbar.viewMode]);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -62,8 +62,8 @@ export default function App() {
   const allTags = useMemo(() => tagCounts.map(([t]) => t).sort((a, b) => a.localeCompare(b)), [tagCounts]);
 
   const visibleFiles = useMemo(
-    () => filterAndSortFiles(files, views, selection, search, fileSort),
-    [files, views, selection, search, fileSort],
+    () => filterAndSortFiles(files, views, selection, fileToolbar.search, fileToolbar.sort),
+    [files, views, selection, fileToolbar.search, fileToolbar.sort],
   );
 
   const activeFile = activeFileId ? files.get(activeFileId) ?? null : null;
@@ -78,8 +78,9 @@ export default function App() {
       if (sh.fileId === fileId) { setShareDialog(sh); return; }
     }
     setPendingShareFor(fileId);
-    poke({ share: { id: fileId } }).catch(() => {
+    poke({ share: { id: fileId } }).catch((e) => {
       setPendingShareFor(null);
+      notifyError(`Share creation failed: ${(e as Error).message}`);
     });
   }, [shares, setShareDialog, setPendingShareFor]);
 
@@ -96,40 +97,32 @@ export default function App() {
     selection.kind === 'canopy-mine' || selection.kind === 'canopy-browse' || selection.kind === 'canopy-peer';
 
   const toolbarProps = useMemo(() => {
-    if (isCanopySelection) return {
-      search: canopySearch, onSearchChange: setCanopySearch,
-      sortKey: canopySort, onSortChange: setCanopySort,
-      viewMode: canopyViewMode, onViewModeChange: setCanopyViewMode,
-      placeholder: 'Search entries…', tint: 'canopy' as const,
-    };
-    if (selection.kind === 'inbox') return {
-      search: inboxSearch, onSearchChange: setInboxSearch,
-      sortKey: inboxSort, onSortChange: setInboxSort,
-      viewMode: inboxViewMode, onViewModeChange: setInboxViewMode,
-      placeholder: 'Search shared…', tint: 'accent' as const,
-    };
-    return {
-      search, onSearchChange: setSearch,
-      sortKey: fileSort, onSortChange: setFileSort,
-      viewMode, onViewModeChange: setViewMode,
-      placeholder: 'Search files & tags…', tint: 'accent' as const,
-    };
+    const fromToolbar = (tb: typeof fileToolbar, placeholder: string, tint: 'accent' | 'canopy') => ({
+      search: tb.search, onSearchChange: tb.setSearch,
+      sortKey: tb.sort, onSortChange: tb.setSort,
+      viewMode: tb.viewMode, onViewModeChange: tb.setViewMode,
+      placeholder, tint,
+    });
+    if (isCanopySelection) return fromToolbar(canopyToolbar, 'Search entries…', 'canopy');
+    if (selection.kind === 'inbox') return fromToolbar(inboxToolbar, 'Search shared…', 'accent');
+    return fromToolbar(fileToolbar, 'Search files & tags…', 'accent');
   }, [
     isCanopySelection, selection.kind,
-    canopySearch, canopySort, canopyViewMode,
-    inboxSearch, inboxSort, inboxViewMode,
-    search, fileSort, viewMode,
+    canopyToolbar, inboxToolbar, fileToolbar,
   ]);
 
-  const activeTitle =
-    selection.kind === 'all' ? 'All files' :
-    selection.kind === 'starred' ? 'Starred' :
-    selection.kind === 'inbox' ? 'Shared with me' :
-    selection.kind === 'canopy-mine' ? 'My canopy' :
-    selection.kind === 'canopy-browse' ? 'Browse canopies' :
-    selection.kind === 'canopy-peer' ? (canopyPeers.get(selection.ship)?.name || selection.ship) :
-    selection.kind === 'view' ? selection.name :
-    selection.kind === 'tag' ? `#${selection.name}` : '';
+  let activeTitle: string;
+  switch (selection.kind) {
+    case 'all': activeTitle = 'All files'; break;
+    case 'starred': activeTitle = 'Starred'; break;
+    case 'inbox': activeTitle = 'Shared with me'; break;
+    case 'canopy-mine': activeTitle = 'My canopy'; break;
+    case 'canopy-browse': activeTitle = 'Browse canopies'; break;
+    case 'canopy-peer': activeTitle = canopyPeers.get(selection.ship)?.name || selection.ship; break;
+    case 'view': activeTitle = selection.name; break;
+    case 'tag': activeTitle = `#${selection.name}`; break;
+    default: activeTitle = '';
+  }
 
   const deleteFile = useCallback((id: string) => {
     if (!confirm('Delete this file?')) return;
@@ -196,43 +189,40 @@ export default function App() {
               entries={Array.from(inbox.values())}
               trusted={trusted}
               blocked={blocked}
-              search={inboxSearch}
-              sortKey={inboxSort}
-              viewMode={inboxViewMode}
-              onAccept={(e) => pokeSafe({ 'accept-offer': { owner: e.owner, id: e.fileId } })}
-              onDecline={(e) => pokeSafe({ 'decline-offer': { owner: e.owner, id: e.fileId } })}
-              onTrust={(s) => pokeSafe({ 'trust-ship': { who: s } })}
-              onUntrust={(s) => pokeSafe({ 'untrust-ship': { who: s } })}
-              onBlock={(s) => pokeSafe({ 'block-ship': { who: s } })}
-              onUnblock={(s) => pokeSafe({ 'unblock-ship': { who: s } })}
-              onFetch={(e) => pokeSafe({ fetch: { owner: e.owner, id: e.fileId } })}
-              onPlant={(e) => pokeSafe({ plant: { owner: e.owner, id: e.fileId } })}
-              onDropCache={(e) => pokeSafe({ 'drop-cache': { owner: e.owner, id: e.fileId } })}
+              search={inboxToolbar.search}
+              sortKey={inboxToolbar.sort}
+              viewMode={inboxToolbar.viewMode}
+              onAccept={inboxActions.accept}
+              onDecline={inboxActions.decline}
+              onTrust={inboxActions.trust}
+              onUntrust={inboxActions.untrust}
+              onBlock={inboxActions.block}
+              onUnblock={inboxActions.unblock}
+              onFetch={inboxActions.fetch}
+              onPlant={inboxActions.plant}
+              onDropCache={inboxActions.dropCache}
             />
           ) : selection.kind === 'canopy-mine' ? (
             <CanopyView
               kind="mine"
               entries={Array.from(canopyEntries.values())}
               config={canopyConfig}
-              search={canopySearch}
-              sortKey={canopySort}
-              viewMode={canopyViewMode}
-              onUnpublish={(id) => pokeSafe({ unpublish: { id } })}
-              onSetMode={(m: CanopyMode) => { setCanopyConfig((c) => ({ ...c, mode: m })); pokeSafe({ 'set-canopy-mode': { mode: m } }); }}
-              onSetName={(name) => pokeSafe({ 'set-canopy-name': { name } })}
-              onAddFriend={(who) => pokeSafe({ 'add-friend': { who } })}
-              onRemoveFriend={(who) => pokeSafe({ 'remove-friend': { who } })}
-              onSetGroup={(flag) => pokeSafe({ 'set-canopy-group': { flag: flag ?? null } })}
+              search={canopyToolbar.search}
+              sortKey={canopyToolbar.sort}
+              viewMode={canopyToolbar.viewMode}
+              onUnpublish={canopyActions.unpublish}
+              onSetMode={canopyActions.setMode}
+              onSetName={canopyActions.setName}
+              onAddFriend={canopyActions.addFriend}
+              onRemoveFriend={canopyActions.removeFriend}
+              onSetGroup={canopyActions.setGroup}
               groups={availableGroups}
             />
           ) : selection.kind === 'canopy-browse' ? (
             <CanopyView
               kind="browse"
               subscribed={new Set(canopyPeers.keys())}
-              onSubscribe={(ship) => {
-                pokeSafe({ 'subscribe-to': { who: ship } });
-                setSelection({ kind: 'canopy-peer', ship });
-              }}
+              onSubscribe={canopyActions.subscribe}
             />
           ) : selection.kind === 'canopy-peer' ? (
             <CanopyView
@@ -240,18 +230,15 @@ export default function App() {
               host={selection.ship}
               listing={canopyPeers.get(selection.ship) ?? null}
               cache={inbox}
-              search={canopySearch}
-              sortKey={canopySort}
-              viewMode={canopyViewMode}
-              onFetch={(host, id) => pokeSafe({ fetch: { owner: host, id } })}
-              onPlant={(host, id) => pokeSafe({ plant: { owner: host, id } })}
-              onDropCache={(host, id) => pokeSafe({ 'drop-cache': { owner: host, id } })}
-              onUnsubscribe={(ship) => {
-                pokeSafe({ 'unsubscribe-from': { who: ship } });
-                setSelection({ kind: 'canopy-browse' });
-              }}
+              search={canopyToolbar.search}
+              sortKey={canopyToolbar.sort}
+              viewMode={canopyToolbar.viewMode}
+              onFetch={canopyActions.fetchEntry}
+              onPlant={canopyActions.plantEntry}
+              onDropCache={canopyActions.dropCache}
+              onUnsubscribe={canopyActions.unsubscribe}
             />
-          ) : viewMode === 'list' ? (
+          ) : fileToolbar.viewMode === 'list' ? (
             <FileList
               files={visibleFiles}
               activeId={activeFileId}

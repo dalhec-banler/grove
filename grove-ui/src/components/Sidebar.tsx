@@ -142,7 +142,7 @@ export default function Sidebar({
               count={counts.canopy}
               active={selection.kind === 'canopy-mine'}
               onClick={() => onSelect({ kind: 'canopy-mine' })}
-              color="canopy"
+              tint="canopy"
             />
             <button
               onClick={() => onSelect({ kind: 'canopy-browse' })}
@@ -188,8 +188,8 @@ function SectionHeader({ label, open, onToggle, onAdd, addTitle, small }: { labe
   );
 }
 
-function SidebarItem({ label, count, active, onClick, color }: { label: string; count: number; active: boolean; onClick: () => void; color?: 'accent' | 'canopy' }) {
-  const c = color ?? 'accent';
+function SidebarItem({ label, count, active, onClick, tint }: { label: string; count: number; active: boolean; onClick: () => void; tint?: 'accent' | 'canopy' }) {
+  const c = tint ?? 'accent';
   const cls = active
     ? c === 'canopy' ? 'bg-canopy-soft text-canopy font-medium' : 'bg-accent-soft text-accent font-medium'
     : 'text-ink hover:bg-bg';

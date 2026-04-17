@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import FileDetails from './FileDetails';
 import type { FileMeta } from '../types';
 
@@ -10,7 +10,7 @@ const file: FileMeta = {
   description: '', starred: false, allowed: ['~zod'],
 };
 
-describe('FileDetails', () => {
+function renderDetails(overrides = {}) {
   const props = {
     file,
     share: null,
@@ -25,25 +25,85 @@ describe('FileDetails', () => {
     onSetAllowed: vi.fn(),
     onPublish: vi.fn(),
     onUnpublish: vi.fn(),
+    ...overrides,
   };
+  render(<FileDetails {...props} />);
+  return props;
+}
+
+describe('FileDetails', () => {
+  afterEach(cleanup);
 
   it('shows file name', () => {
-    render(<FileDetails {...props} />);
+    renderDetails();
     expect(screen.getByText('report.pdf')).toBeTruthy();
   });
 
   it('shows file type in metadata', () => {
-    render(<FileDetails {...props} />);
+    renderDetails();
     expect(screen.getAllByText('pdf').length).toBeGreaterThan(0);
   });
 
   it('shows tags', () => {
-    render(<FileDetails {...props} />);
+    renderDetails();
     expect(screen.getAllByText('work').length).toBeGreaterThan(0);
   });
 
   it('shows allowed ships', () => {
-    render(<FileDetails {...props} />);
+    renderDetails();
     expect(screen.getAllByText('~zod').length).toBeGreaterThan(0);
+  });
+
+  it('calls onClose when close button is clicked', () => {
+    const props = renderDetails();
+    const closeButtons = screen.getAllByText('×');
+    // The first × is the close button in the header
+    fireEvent.click(closeButtons[0]);
+    expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it('calls onRemoveTags when tag remove button is clicked', () => {
+    const props = renderDetails();
+    // The × buttons after the first one: tag remove, then ship remove
+    // Find the tag chip's remove button specifically
+    const tagChip = screen.getByText('work').closest('span');
+    const removeBtn = tagChip!.querySelector('button')!;
+    fireEvent.click(removeBtn);
+    expect(props.onRemoveTags).toHaveBeenCalledWith(['work']);
+  });
+
+  it('enters rename mode and calls onRename on Enter', () => {
+    const props = renderDetails();
+    fireEvent.click(screen.getByText('Rename'));
+    const input = screen.getByDisplayValue('report.pdf');
+    fireEvent.change(input, { target: { value: 'new-name.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(props.onRename).toHaveBeenCalledWith('new-name.pdf');
+  });
+
+  it('adds a tag via Enter key', () => {
+    const props = renderDetails();
+    const input = screen.getByPlaceholderText('Add tag…');
+    fireEvent.change(input, { target: { value: 'urgent' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(props.onAddTags).toHaveBeenCalledWith(['urgent']);
+  });
+
+  it('calls onPublish when publish button is clicked', () => {
+    const props = renderDetails();
+    fireEvent.click(screen.getByText('Publish to canopy…'));
+    expect(props.onPublish).toHaveBeenCalled();
+  });
+
+  it('shows published state when published is true', () => {
+    renderDetails({ published: true });
+    expect(screen.getByText('Published to your canopy')).toBeTruthy();
+  });
+
+  it('toggles public link checkbox and calls onShare', () => {
+    const props = renderDetails();
+    const checkbox = screen.getByLabelText('Public link');
+    fireEvent.click(checkbox);
+    expect(props.onShare).toHaveBeenCalled();
   });
 });

@@ -31,8 +31,8 @@ export default function FileDetails({ file, share, published, onClose, onRename,
 
   useEffect(() => { setNameDraft(file.name); setRenaming(false); }, [file.id]);
 
-  function handleAddTag() {
-    const updated = addTag(file.tags, tagDraft);
+  function handleAddTag(t: string) {
+    const updated = addTag(file.tags, t);
     if (!updated) return;
     onAddTags([updated[updated.length - 1]]);
     setTagDraft('');
@@ -114,7 +114,7 @@ export default function FileDetails({ file, share, published, onClose, onRename,
         <input
           value={tagDraft}
           onChange={(e) => setTagDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(tagDraft); } }}
           placeholder="Add tag…"
           className="w-full border border-border rounded px-2 py-1 text-sm"
         />

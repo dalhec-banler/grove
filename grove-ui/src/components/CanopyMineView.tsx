@@ -5,7 +5,7 @@ import { fileUrl } from '../urls';
 import Thumb from './Thumb';
 import ListGridLayout from './ListGridLayout';
 import ShipChip from './ShipChip';
-import { useFacetFilter, FacetChips } from '../canopy-utils';
+import { useFacetFilter, FacetChips } from './CanopyUtils';
 
 export interface MineProps {
   kind: 'mine';
@@ -23,19 +23,22 @@ export interface MineProps {
   groups: GroupInfo[];
 }
 
-export default function MineView(p: MineProps) {
-  const [nameDraft, setNameDraft] = useState(p.config.name);
+export default function MineView({
+  entries, config, search, sortKey, viewMode,
+  onUnpublish, onSetMode, onSetName, onAddFriend, onRemoveFriend, onSetGroup, groups,
+}: MineProps) {
+  const [nameDraft, setNameDraft] = useState(config.name);
   const [friendDraft, setFriendDraft] = useState('');
   const [friendError, setFriendError] = useState<string | null>(null);
 
-  useEffect(() => { setNameDraft(p.config.name); }, [p.config.name]);
+  useEffect(() => { setNameDraft(config.name); }, [config.name]);
 
   function addFriend() {
     const norm = normalizeShip(friendDraft);
     if (!norm) { setFriendError('not a valid @p'); return; }
-    if (p.config.friends.includes(norm)) { setFriendError('already a friend'); return; }
+    if (config.friends.includes(norm)) { setFriendError('already a friend'); return; }
     setFriendError(null);
-    p.onAddFriend(norm);
+    onAddFriend(norm);
     setFriendDraft('');
   }
 
@@ -54,8 +57,8 @@ export default function MineView(p: MineProps) {
                 className="flex-1 border border-border rounded px-2 py-1 text-sm"
               />
               <button
-                onClick={() => p.onSetName(nameDraft)}
-                disabled={nameDraft === p.config.name}
+                onClick={() => onSetName(nameDraft)}
+                disabled={nameDraft === config.name}
                 className="text-xs px-3 py-1 rounded bg-canopy text-white disabled:opacity-40"
               >Save</button>
             </div>
@@ -64,34 +67,34 @@ export default function MineView(p: MineProps) {
             <label className="text-xs text-muted block mb-1">Visibility</label>
             <div className="flex border border-border rounded overflow-hidden text-xs w-fit">
               <button
-                onClick={() => p.onSetMode('open')}
-                className={`px-3 py-1 ${p.config.mode === 'open' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+                onClick={() => onSetMode('open')}
+                className={`px-3 py-1 ${config.mode === 'open' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
               >Open · anyone</button>
               <button
-                onClick={() => p.onSetMode('friends')}
-                className={`px-3 py-1 border-l border-border ${p.config.mode === 'friends' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+                onClick={() => onSetMode('friends')}
+                className={`px-3 py-1 border-l border-border ${config.mode === 'friends' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
               >Friends only</button>
               <button
-                onClick={() => p.onSetMode('group')}
-                className={`px-3 py-1 border-l border-border ${p.config.mode === 'group' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
+                onClick={() => onSetMode('group')}
+                className={`px-3 py-1 border-l border-border ${config.mode === 'group' ? 'bg-canopy-soft text-canopy' : 'text-muted hover:bg-bg'}`}
               >Group</button>
             </div>
             <div className="text-xs text-faint mt-1">
-              {p.config.mode === 'open'
+              {config.mode === 'open'
                 ? 'Anyone can subscribe and download published files.'
-                : p.config.mode === 'friends'
+                : config.mode === 'friends'
                 ? 'Only ships on your friends list can see and download.'
                 : 'Only members of the selected Tlon group can see and download.'}
             </div>
           </div>
-          {p.config.mode === 'friends' && (
+          {config.mode === 'friends' && (
             <div>
               <label className="text-xs text-muted block mb-1">Friends</label>
               <div className="flex flex-wrap gap-1 mb-2">
-                {p.config.friends.map((s) => (
-                  <ShipChip key={s} ship={s} onRemove={() => p.onRemoveFriend(s)} />
+                {config.friends.map((s) => (
+                  <ShipChip key={s} ship={s} onRemove={() => onRemoveFriend(s)} />
                 ))}
-                {p.config.friends.length === 0 && <span className="text-xs text-faint">No friends yet</span>}
+                {config.friends.length === 0 && <span className="text-xs text-faint">No friends yet</span>}
               </div>
               <div className="flex gap-2">
                 <input
@@ -106,20 +109,20 @@ export default function MineView(p: MineProps) {
               {friendError && <div className="text-xs text-red-600 mt-1">{friendError}</div>}
             </div>
           )}
-          {p.config.mode === 'group' && (
+          {config.mode === 'group' && (
             <div>
               <label className="text-xs text-muted block mb-1">Select a group</label>
-              {p.groups.length === 0 ? (
+              {groups.length === 0 ? (
                 <div className="text-xs text-faint">No groups found. Join a group in Tlon Messenger first.</div>
               ) : (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
-                    {p.groups.map((g) => {
-                      const isSelected = p.config.groupFlag?.host === g.host && p.config.groupFlag?.name === g.name;
+                    {groups.map((g) => {
+                      const isSelected = config.groupFlag?.host === g.host && config.groupFlag?.name === g.name;
                       return (
                         <button
                           key={`${g.host}/${g.name}`}
-                          onClick={() => p.onSetGroup(isSelected ? null : { host: g.host, name: g.name })}
+                          onClick={() => onSetGroup(isSelected ? null : { host: g.host, name: g.name })}
                           className={`text-xs px-3 py-1.5 rounded border ${isSelected ? 'bg-canopy-soft border-canopy text-canopy font-medium' : 'border-border text-muted hover:text-ink hover:border-ink/30'}`}
                         >
                           <div className="font-medium">{g.title || g.name}</div>
@@ -128,9 +131,9 @@ export default function MineView(p: MineProps) {
                       );
                     })}
                   </div>
-                  {p.config.groupFlag && (
+                  {config.groupFlag && (
                     <div className="text-xs text-faint">
-                      Linked to <span className="font-mono">{p.config.groupFlag.host}/{p.config.groupFlag.name}</span>
+                      Linked to <span className="font-mono">{config.groupFlag.host}/{config.groupFlag.name}</span>
                     </div>
                   )}
                 </div>
@@ -140,7 +143,7 @@ export default function MineView(p: MineProps) {
         </div>
       </section>
 
-      <MinePublished entries={p.entries} search={p.search} sortKey={p.sortKey} viewMode={p.viewMode} onUnpublish={p.onUnpublish} />
+      <MinePublished entries={entries} search={search} sortKey={sortKey} viewMode={viewMode} onUnpublish={onUnpublish} />
     </div>
   );
 }

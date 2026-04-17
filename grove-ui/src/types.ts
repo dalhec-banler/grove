@@ -120,6 +120,86 @@ export type Selection =
   | { kind: 'canopy-browse' }
   | { kind: 'canopy-peer'; ship: string };
 
+// Wire-format interfaces matching Hoon JSON serialization.
+// Scry responses use kebab-case; subscription updates use camelCase.
+// fromJson parsers accept both via fallback reads.
+export interface RawFileMeta {
+  id: string;
+  name: string;
+  'file-mark': string;
+  size: number;
+  tags?: string[];
+  created: string;
+  modified: string;
+  description?: string;
+  starred?: boolean;
+  allowed?: string[];
+}
+
+export interface RawInboxEntry {
+  owner: string;
+  'file-id'?: string;
+  fileId?: string;
+  name: string;
+  fileMark?: string;
+  'file-mark'?: string;
+  size: number;
+  offered: string;
+  accepted?: boolean;
+  cached?: boolean;
+}
+
+export interface RawCanopyEntry {
+  id: string;
+  displayName?: string;
+  'display-name'?: string;
+  name?: string;
+  fileMark?: string;
+  'file-mark'?: string;
+  size: number;
+  tags?: string[];
+  published: string;
+  description?: string;
+}
+
+export interface RawCanopyConfig {
+  mode?: unknown;
+  name?: string;
+  friends?: string[];
+  'group-flag'?: { host: string; name: string } | null;
+}
+
+export interface RawCanopyListing {
+  host: string;
+  name?: string;
+  mode?: unknown;
+  entries?: RawCanopyEntry[];
+}
+
+export interface RawView {
+  name: string;
+  tags?: string[];
+  color: string;
+}
+
+export interface RawShare {
+  token: string;
+  'file-id': string;
+  name: string;
+}
+
+export interface RawCanopySearchHit {
+  host: string;
+  entry: RawCanopyEntry;
+}
+
+export interface RawGroupInfo {
+  host: string;
+  name: string;
+  title?: string;
+  members?: number;
+}
+
 export type GroveAction =
   | { upload: { name: string; 'file-mark': string; data: string; tags: string[] } }
   | { rename: { id: FileId; name: string } }

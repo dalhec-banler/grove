@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { CanopyEntry, SortKey } from './types';
-import { sortByKey } from './sort';
+import type { CanopyEntry, SortKey } from '../types';
+import { sortByKey } from '../sort';
 
 export function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[] {
   return sortByKey(entries, key, {
@@ -13,8 +13,9 @@ export function sortEntries(entries: CanopyEntry[], key: SortKey): CanopyEntry[]
 
 export function filterEntries(entries: CanopyEntry[], tags: Set<string>, types: Set<string>, search: string): CanopyEntry[] {
   const q = search.trim().toLowerCase();
+  const tagArr = Array.from(tags);
   return entries.filter((e) => {
-    if (tags.size > 0 && !Array.from(tags).every((t) => e.tags.includes(t))) return false;
+    if (tagArr.length > 0 && !tagArr.every((t) => e.tags.includes(t))) return false;
     if (types.size > 0 && !types.has(e.fileMark.toLowerCase())) return false;
     if (q) {
       const hay = `${e.displayName} ${e.description} ${e.tags.join(' ')}`.toLowerCase();

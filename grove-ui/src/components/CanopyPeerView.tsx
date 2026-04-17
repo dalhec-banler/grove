@@ -5,7 +5,7 @@ import { remoteFileUrl } from '../urls';
 import Thumb from './Thumb';
 import ListGridLayout from './ListGridLayout';
 import PreviewPane from './PreviewPane';
-import { useFacetFilter, FacetChips } from '../canopy-utils';
+import { useFacetFilter, FacetChips } from './CanopyUtils';
 
 export interface PeerProps {
   kind: 'peer';
@@ -21,17 +21,20 @@ export interface PeerProps {
   onUnsubscribe: (ship: string) => void;
 }
 
-export default function PeerView(p: PeerProps) {
-  const baseEntries = p.listing?.entries ?? [];
-  const { filtered: entries, tagFacets, typeFacets, activeTags, activeTypes, toggleTag, toggleType, clearFilters } = useFacetFilter(baseEntries, p.search, p.sortKey);
+export default function PeerView({
+  host, listing, cache, search, sortKey, viewMode,
+  onFetch, onPlant, onDropCache, onUnsubscribe,
+}: PeerProps) {
+  const baseEntries = listing?.entries ?? [];
+  const { filtered: entries, tagFacets, typeFacets, activeTags, activeTypes, toggleTag, toggleType, clearFilters } = useFacetFilter(baseEntries, search, sortKey);
 
-  if (!p.listing) {
+  if (!listing) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center">
-          <div className="text-sm text-faint mb-3">Waiting for {p.host}'s catalog…</div>
+          <div className="text-sm text-faint mb-3">Waiting for {host}'s catalog…</div>
           <button
-            onClick={() => { if (confirm(`Unsubscribe from ${p.host}?`)) p.onUnsubscribe(p.host); }}
+            onClick={() => { if (confirm(`Unsubscribe from ${host}?`)) onUnsubscribe(host); }}
             className="text-xs px-3 py-1 rounded border border-border text-muted hover:text-red-600"
           >Unsubscribe</button>
         </div>
@@ -43,11 +46,11 @@ export default function PeerView(p: PeerProps) {
     <div className="flex-1 overflow-y-auto p-6 space-y-4">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-medium truncate">{p.listing.name || p.listing.host}</h2>
-          <div className="text-xs text-faint font-mono truncate">{p.listing.host} · {p.listing.mode}</div>
+          <h2 className="text-base font-medium truncate">{listing.name || listing.host}</h2>
+          <div className="text-xs text-faint font-mono truncate">{listing.host} · {listing.mode}</div>
         </div>
         <button
-          onClick={() => { if (confirm(`Unsubscribe from ${p.host}?`)) p.onUnsubscribe(p.host); }}
+          onClick={() => { if (confirm(`Unsubscribe from ${host}?`)) onUnsubscribe(host); }}
           className="text-xs px-3 py-1 rounded border border-border text-muted hover:text-red-600"
         >Unsubscribe</button>
       </div>
@@ -65,15 +68,15 @@ export default function PeerView(p: PeerProps) {
       ) : (
         <ListGridLayout
           items={entries}
-          viewMode={p.viewMode}
+          viewMode={viewMode}
           keyFn={(e) => e.id}
           renderRow={(e) => {
-            const cached = p.cache.get(`${p.host}/${e.id}`);
-            return <PeerRow host={p.host} entry={e} cached={cached} onFetch={() => p.onFetch(p.host, e.id)} onPlant={() => p.onPlant(p.host, e.id)} onDropCache={() => p.onDropCache(p.host, e.id)} />;
+            const cached = cache.get(`${host}/${e.id}`);
+            return <PeerRow host={host} entry={e} cached={cached} onFetch={() => onFetch(host, e.id)} onPlant={() => onPlant(host, e.id)} onDropCache={() => onDropCache(host, e.id)} />;
           }}
           renderCard={(e) => {
-            const cached = p.cache.get(`${p.host}/${e.id}`);
-            return <PeerCard host={p.host} entry={e} cached={cached} onFetch={() => p.onFetch(p.host, e.id)} onPlant={() => p.onPlant(p.host, e.id)} onDropCache={() => p.onDropCache(p.host, e.id)} />;
+            const cached = cache.get(`${host}/${e.id}`);
+            return <PeerCard host={host} entry={e} cached={cached} onFetch={() => onFetch(host, e.id)} onPlant={() => onPlant(host, e.id)} />;
           }}
         />
       )}
@@ -132,9 +135,9 @@ function PeerRow({ host, entry, cached, onFetch, onPlant, onDropCache }: {
   );
 }
 
-function PeerCard({ host, entry, cached, onFetch, onPlant, onDropCache }: {
+function PeerCard({ host, entry, cached, onFetch, onPlant }: {
   host: string; entry: CanopyEntry; cached: InboxEntry | undefined;
-  onFetch: () => void; onPlant: () => void; onDropCache: () => void;
+  onFetch: () => void; onPlant: () => void;
 }) {
   const isCached = !!cached?.cached;
 

@@ -15,8 +15,8 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
   const [tagDraft, setTagDraft] = useState('');
   const [tags, setTags] = useState<string[]>(file.tags);
 
-  function handleAddTag() {
-    const updated = addTag(tags, tagDraft);
+  function handleAddTag(t: string) {
+    const updated = addTag(tags, t);
     if (!updated) return;
     setTags(updated);
     setTagDraft('');
@@ -68,7 +68,7 @@ export default function PublishModal({ file, onClose, onPublish }: Props) {
             <input
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag(tagDraft); } }}
               placeholder="Add tag…"
               className="w-full border border-border rounded px-2 py-1 text-sm"
             />

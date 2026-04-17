@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { CanopySearchHit } from '../types';
+import { useState } from 'react';
 import { formatBytes, normalizeShip } from '../format';
-import { scryCanopySearch } from '../api';
+import { useCanopySearch } from '../useCanopySearch';
 import Thumb from './Thumb';
 
 export interface BrowseProps {
@@ -10,34 +9,17 @@ export interface BrowseProps {
   subscribed: Set<string>;
 }
 
-export default function BrowseView(p: BrowseProps) {
+export default function BrowseView({ onSubscribe, subscribed }: BrowseProps) {
   const [peerDraft, setPeerDraft] = useState('');
   const [peerError, setPeerError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [hits, setHits] = useState<CanopySearchHit[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const q = searchTerm.trim();
-    if (!q) { setHits([]); setSearchError(null); return; }
-    let cancelled = false;
-    setSearching(true);
-    setSearchError(null);
-    const h = setTimeout(() => {
-      scryCanopySearch(q)
-        .then((r) => { if (!cancelled) setHits(r); })
-        .catch((e) => { if (!cancelled) { console.error('search', e); setSearchError('Search failed — try again.'); } })
-        .finally(() => { if (!cancelled) setSearching(false); });
-    }, 250);
-    return () => { cancelled = true; clearTimeout(h); };
-  }, [searchTerm]);
+  const { hits, searching, error: searchError } = useCanopySearch(searchTerm);
 
   function subscribe() {
     const norm = normalizeShip(peerDraft);
     if (!norm) { setPeerError('not a valid @p'); return; }
     setPeerError(null);
-    p.onSubscribe(norm);
+    onSubscribe(norm);
     setPeerDraft('');
   }
 
@@ -72,11 +54,11 @@ export default function BrowseView(p: BrowseProps) {
         {searching && <div className="text-xs text-faint">Searching…</div>}
         {searchError && <div className="text-xs text-red-600">{searchError}</div>}
         {!searching && !searchError && searchTerm.trim() && hits.length === 0 && (
-          <div className="text-xs text-faint">No results across {p.subscribed.size} subscription(s).</div>
+          <div className="text-xs text-faint">No results across {subscribed.size} subscription(s).</div>
         )}
         {!searchTerm.trim() && (
           <div className="text-xs text-faint">
-            {p.subscribed.size === 0
+            {subscribed.size === 0
               ? 'No subscriptions yet. Subscribe to a ship above to start browsing.'
               : 'Type to search across your subscriptions.'}
           </div>

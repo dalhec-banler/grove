@@ -5,7 +5,7 @@ import PeerView from './CanopyPeerView';
 export type { MineProps } from './CanopyMineView';
 export type { BrowseProps } from './CanopyBrowseView';
 export type { PeerProps } from './CanopyPeerView';
-export { sortEntries, filterEntries, facets } from '../canopy-utils';
+export { sortEntries, filterEntries, facets } from './CanopyUtils';
 
 export default function CanopyView(props: Parameters<typeof MineView>[0] | Parameters<typeof BrowseView>[0] | Parameters<typeof PeerView>[0]) {
   return (
