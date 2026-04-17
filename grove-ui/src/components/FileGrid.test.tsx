@@ -16,6 +16,8 @@ function renderGrid(overrides = {}) {
     selectedIds: new Set<string>(),
     onSelect: vi.fn(),
     onToggleSelect: vi.fn(),
+    onRangeSelect: vi.fn(),
+    onBatchSelect: vi.fn(),
     onToggleStar: vi.fn(),
     onShare: vi.fn(),
     onDelete: vi.fn(),

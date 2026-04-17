@@ -134,6 +134,8 @@ export type Selection =
   | { kind: 'view'; name: string }
   | { kind: 'tag'; name: string }
   | { kind: 'inbox' }
+  | { kind: 'shared-views' }
+  | { kind: 'shared-view'; host: string; name: string }
   | { kind: 'canopy-mine' }
   | { kind: 'canopy-browse' }
   | { kind: 'canopy-peer'; ship: string };

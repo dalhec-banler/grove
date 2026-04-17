@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { FileMeta } from '../types';
 import { formatBytes, formatDate } from '../format';
 import { fileUrl } from '../urls';
@@ -10,15 +11,65 @@ interface Props {
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onToggleSelect: (id: string) => void;
+  onRangeSelect: (id: string) => void;
+  onBatchSelect: (ids: Set<string>) => void;
   onToggleStar: (id: string) => void;
   onShare: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
 export default function FileList({
-  files, activeId, selectedIds, onSelect, onToggleSelect,
+  files, activeId, selectedIds, onSelect, onToggleSelect, onRangeSelect, onBatchSelect,
   onToggleStar, onShare, onDelete,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [focusIndex, setFocusIndex] = useState(-1);
+
+  useEffect(() => setFocusIndex(-1), [files]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (files.length === 0) return;
+    if (e.key === 'Escape') {
+      onBatchSelect(new Set());
+      setFocusIndex(-1);
+      return;
+    }
+    if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      onBatchSelect(new Set(files.map((f) => f.id)));
+      return;
+    }
+
+    let delta = 0;
+    switch (e.key) {
+      case 'ArrowUp': delta = -1; break;
+      case 'ArrowDown': delta = 1; break;
+      case ' ':
+        e.preventDefault();
+        if (focusIndex >= 0 && focusIndex < files.length) onToggleSelect(files[focusIndex].id);
+        return;
+      case 'Enter':
+        e.preventDefault();
+        if (focusIndex >= 0 && focusIndex < files.length) onSelect(files[focusIndex].id);
+        return;
+      default: return;
+    }
+    e.preventDefault();
+    const cur = focusIndex < 0 ? 0 : focusIndex;
+    const next = Math.max(0, Math.min(files.length - 1, cur + delta));
+    setFocusIndex(next);
+    if (e.shiftKey) onRangeSelect(files[next].id);
+    const rows = containerRef.current?.querySelectorAll('tbody tr');
+    (rows?.[next] as HTMLElement)?.scrollIntoView({ block: 'nearest' });
+  }, [files, focusIndex, onSelect, onToggleSelect, onRangeSelect, onBatchSelect]);
+
+  const handleRowClick = useCallback((id: string, idx: number, e: React.MouseEvent) => {
+    setFocusIndex(idx);
+    if (e.shiftKey) onRangeSelect(id);
+    else if (e.metaKey || e.ctrlKey) onToggleSelect(id);
+    else onSelect(id);
+  }, [onSelect, onToggleSelect, onRangeSelect]);
+
   if (files.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-faint text-sm">
@@ -26,8 +77,14 @@ export default function FileList({
       </div>
     );
   }
+
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
       <table className="w-full text-sm">
         <thead className="text-xs text-muted uppercase tracking-wider bg-bg sticky top-0">
           <tr>
@@ -41,8 +98,9 @@ export default function FileList({
           </tr>
         </thead>
         <tbody>
-          {files.map((f) => {
+          {files.map((f, i) => {
             const selected = selectedIds.has(f.id);
+            const focused = focusIndex === i;
             return (
               <tr
                 key={f.id}
@@ -51,16 +109,19 @@ export default function FileList({
                   const ids = selectedIds.has(f.id) ? Array.from(selectedIds) : [f.id];
                   setDragFileIds(e, ids);
                 }}
-                onClick={() => onSelect(f.id)}
+                onClick={(e) => handleRowClick(f.id, i, e)}
                 className={`border-b border-border cursor-pointer group ${
-                  selected ? 'bg-accent-soft' : activeId === f.id ? 'bg-accent-soft' : 'hover:bg-bg'
+                  selected ? 'bg-accent-soft'
+                  : activeId === f.id ? 'bg-accent-soft'
+                  : focused ? 'bg-accent-soft/50'
+                  : 'hover:bg-bg'
                 }`}
               >
                 <td className="pl-3">
                   <input
                     type="checkbox"
                     checked={selected}
-                    onChange={(e) => { e.stopPropagation(); onToggleSelect(f.id); }}
+                    onChange={(e) => { e.stopPropagation(); setFocusIndex(i); onToggleSelect(f.id); }}
                     onClick={(e) => e.stopPropagation()}
                     className="w-3.5 h-3.5 accent-accent"
                   />

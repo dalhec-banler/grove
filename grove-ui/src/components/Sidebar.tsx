@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Selection, View } from '../types';
+import type { Selection, View, GroveViewListing } from '../types';
 import { isGroveDrag, getDragFileIds } from '../dnd';
 import { shortShip } from '../format';
 
@@ -18,21 +18,27 @@ interface Props {
   onUnsubscribeCanopy: (ship: string) => void;
   onDropOnView: (viewName: string, fileIds: string[]) => void;
   onDropOnCanopy: (fileIds: string[]) => void;
+  svPeers: Map<string, GroveViewListing>;
+  onUnsubscribeSharedView: (host: string, name: string) => void;
 }
 
 export default function Sidebar({
   views, tagCounts, selection, onSelect, onNewView, onEditView, onDeleteView,
   counts, connected, shipName, canopyPeers, onUnsubscribeCanopy,
-  onDropOnView, onDropOnCanopy,
+  onDropOnView, onDropOnCanopy, svPeers, onUnsubscribeSharedView,
 }: Props) {
   const [viewsOpen, setViewsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
   const [subsOpen, setSubsOpen] = useState(true);
+  const [sharedOpen, setSharedOpen] = useState(true);
+  const [svSubsOpen, setSvSubsOpen] = useState(true);
   const [tagFilter, setTagFilter] = useState('');
 
   const filteredTags = tagCounts.filter(([t]) =>
     !tagFilter || t.toLowerCase().includes(tagFilter.toLowerCase())
   );
+
+  const svList = Array.from(svPeers.entries()).map(([, v]) => v);
 
   return (
     <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
@@ -42,7 +48,7 @@ export default function Sidebar({
           <div className="font-medium leading-tight">Grove</div>
           <div className="text-[10px] text-faint font-mono truncate leading-tight">{shortShip(shipName)}</div>
         </div>
-        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-faint'}`} title={connected ? 'connected' : 'connecting…'} />
+        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-faint'}`} title={connected ? 'connected' : 'connecting...'} />
       </div>
 
       <nav className="flex-1 overflow-y-auto">
@@ -59,18 +65,6 @@ export default function Sidebar({
             active={selection.kind === 'starred'}
             onClick={() => onSelect({ kind: 'starred' })}
           />
-          <button
-            onClick={() => onSelect({ kind: 'inbox' })}
-            className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${selection.kind === 'inbox' ? 'bg-accent-soft text-accent font-medium' : 'text-ink hover:bg-bg'}`}
-          >
-            <span className="truncate">Shared with me</span>
-            <span className="flex items-center gap-1.5 ml-2">
-              {counts.inboxPending > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{counts.inboxPending}</span>
-              )}
-              <span className="text-xs text-faint">{counts.inbox}</span>
-            </span>
-          </button>
 
           <SectionHeader
             label="Views"
@@ -113,7 +107,7 @@ export default function Sidebar({
                     <input
                       value={tagFilter}
                       onChange={(e) => setTagFilter(e.target.value)}
-                      placeholder="Search tags…"
+                      placeholder="Search tags..."
                       className="w-full text-xs border border-border rounded px-2 py-1"
                     />
                   </div>
@@ -131,6 +125,55 @@ export default function Sidebar({
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          <SectionHeader
+            label="Shared with me"
+            open={sharedOpen}
+            onToggle={() => setSharedOpen(!sharedOpen)}
+          />
+          {sharedOpen && (
+            <div className="mt-1">
+              <button
+                onClick={() => onSelect({ kind: 'inbox' })}
+                className={`w-full px-4 py-1.5 flex items-center justify-between text-sm ${
+                  selection.kind === 'inbox' ? 'bg-accent-soft text-accent font-medium' : 'text-ink hover:bg-bg'
+                }`}
+              >
+                <span className="truncate">Files</span>
+                <span className="flex items-center gap-1.5 ml-2">
+                  {counts.inboxPending > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent text-white">{counts.inboxPending}</span>
+                  )}
+                  <span className="text-xs text-faint">{counts.inbox}</span>
+                </span>
+              </button>
+              <SidebarItem
+                label="Shared Views"
+                count={svList.length}
+                active={selection.kind === 'shared-views'}
+                onClick={() => onSelect({ kind: 'shared-views' })}
+              />
+              {svList.length > 0 && (
+                <SectionHeader
+                  label={`Subscriptions (${svList.length})`}
+                  open={svSubsOpen}
+                  onToggle={() => setSvSubsOpen(!svSubsOpen)}
+                  small
+                />
+              )}
+              {svSubsOpen && svList.map((sv) => (
+                <SharedViewSubItem
+                  key={`${sv.host}/${sv.name}`}
+                  listing={sv}
+                  active={selection.kind === 'shared-view' && selection.host === sv.host && selection.name === sv.name}
+                  onClick={() => onSelect({ kind: 'shared-view', host: sv.host, name: sv.name })}
+                  onUnsubscribe={() => {
+                    if (confirm(`Unsubscribe from ${sv.name} on ${sv.host}?`)) onUnsubscribeSharedView(sv.host, sv.name);
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -240,6 +283,21 @@ function PeerItem({ ship, active, onClick, onUnsubscribe }: { ship: string; acti
     <div className={`group flex items-center pr-2 ${active ? 'bg-canopy-soft' : 'hover:bg-bg'}`}>
       <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
         <span className={`truncate font-mono text-xs ${active ? 'text-canopy font-medium' : 'text-ink'}`}>{shortShip(ship)}</span>
+      </button>
+      <button className="hidden group-hover:block text-xs text-muted hover:text-red-600 px-1" onClick={onUnsubscribe} title="Unsubscribe">×</button>
+    </div>
+  );
+}
+
+function SharedViewSubItem({ listing, active, onClick, onUnsubscribe }: {
+  listing: GroveViewListing; active: boolean; onClick: () => void; onUnsubscribe: () => void;
+}) {
+  return (
+    <div className={`group flex items-center pr-2 ${active ? 'bg-accent-soft' : 'hover:bg-bg'}`}>
+      <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: listing.color }} />
+        <span className={`truncate text-xs ${active ? 'text-accent font-medium' : 'text-ink'}`}>{listing.name}</span>
+        <span className="text-[10px] text-faint font-mono shrink-0">{shortShip(listing.host)}</span>
       </button>
       <button className="hidden group-hover:block text-xs text-muted hover:text-red-600 px-1" onClick={onUnsubscribe} title="Unsubscribe">×</button>
     </div>

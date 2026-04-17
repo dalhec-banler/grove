@@ -20,6 +20,7 @@ import InboxView from './components/InboxView';
 import CanopyView from './components/CanopyView';
 import ToolbarControls from './components/ToolbarControls';
 import PublishModal from './components/PublishModal';
+import SharedViewsView from './components/SharedViewsView';
 
 export default function App() {
   const isUploadingRef = useRef(false);
@@ -27,7 +28,7 @@ export default function App() {
 
   const {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, availableGroups,
+    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, availableGroups,
     connected, loadError, setPendingShareFor, shareDialog, setShareDialog,
   } = useGroveData(isUploadingRef, uploadCollectedRef);
 
@@ -36,6 +37,7 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>({ kind: 'all' });
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [anchorId, setAnchorId] = useState<string | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [editingView, setEditingView] = useState<View | null>(null);
   const [publishingFile, setPublishingFile] = useState<FileMeta | null>(null);
@@ -57,7 +59,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('grove:viewMode', fileToolbar.viewMode); }, [fileToolbar.viewMode]);
 
   // Clear file selection when navigating to a different section.
-  useEffect(() => { setSelectedIds(new Set()); }, [selection]);
+  useEffect(() => { setSelectedIds(new Set()); setAnchorId(null); }, [selection]);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -97,6 +99,22 @@ export default function App() {
       else next.add(id);
       return next;
     });
+    setAnchorId(id);
+  }, []);
+
+  const rangeSelect = useCallback((toId: string) => {
+    const fromIdx = anchorId ? visibleFiles.findIndex((f) => f.id === anchorId) : 0;
+    const toIdx = visibleFiles.findIndex((f) => f.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const start = Math.min(fromIdx, toIdx);
+    const end = Math.max(fromIdx, toIdx);
+    const next = new Set<string>();
+    for (let i = start; i <= end; i++) next.add(visibleFiles[i].id);
+    setSelectedIds(next);
+  }, [anchorId, visibleFiles]);
+
+  const batchSelect = useCallback((ids: Set<string>) => {
+    setSelectedIds(ids);
   }, []);
 
   const deleteFile = useCallback((id: string) => {
@@ -161,7 +179,10 @@ export default function App() {
   const isCanopySelection =
     selection.kind === 'canopy-mine' || selection.kind === 'canopy-browse' || selection.kind === 'canopy-peer';
 
-  const isFileView = !isCanopySelection && selection.kind !== 'inbox';
+  const isSharedViewSelection =
+    selection.kind === 'shared-views' || selection.kind === 'shared-view';
+
+  const isFileView = !isCanopySelection && !isSharedViewSelection && selection.kind !== 'inbox';
 
   const toolbarProps = useMemo(() => {
     const fromToolbar = (tb: typeof fileToolbar, placeholder: string, tint: 'accent' | 'canopy') => ({
@@ -182,7 +203,9 @@ export default function App() {
   switch (selection.kind) {
     case 'all': activeTitle = 'All files'; break;
     case 'starred': activeTitle = 'Starred'; break;
-    case 'inbox': activeTitle = 'Shared with me'; break;
+    case 'inbox': activeTitle = 'Shared files'; break;
+    case 'shared-views': activeTitle = 'Shared Views'; break;
+    case 'shared-view': activeTitle = selection.name; break;
     case 'canopy-mine': activeTitle = 'My canopy'; break;
     case 'canopy-browse': activeTitle = 'Browse canopies'; break;
     case 'canopy-peer': activeTitle = canopyPeers.get(selection.ship)?.name || selection.ship; break;
@@ -219,6 +242,13 @@ export default function App() {
         }}
         onDropOnView={handleDropOnView}
         onDropOnCanopy={handleDropOnCanopy}
+        svPeers={svPeers}
+        onUnsubscribeSharedView={(host, name) => {
+          pokeSafe({ 'unsubscribe-view': { who: host, name } });
+          if (selection.kind === 'shared-view' && selection.host === host && selection.name === name) {
+            setSelection({ kind: 'shared-views' });
+          }
+        }}
       />
       <main className="flex-1 flex flex-col min-w-0">
         {loadError && (
@@ -236,12 +266,25 @@ export default function App() {
                 <span>{activeTitle}</span>
                 <span className="text-xs text-faint font-mono font-normal">{selection.ship}</span>
               </span>
+            ) : selection.kind === 'shared-view' ? (
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full" style={{ background: svPeers.get(`${selection.host}/${selection.name}`)?.color ?? '#888' }} />
+                <span>{selection.name}</span>
+                <span className="text-xs text-faint font-mono font-normal">{selection.host}</span>
+              </span>
             ) : activeTitle}
           </h1>
-          {selection.kind !== 'canopy-browse' && (
+          {isFileView && selectedIds.size > 0 ? (
+            <BulkActionBar
+              count={selectedIds.size}
+              onDelete={bulkDelete}
+              onTag={() => setBulkTagForSelection(Array.from(selectedIds))}
+              onClear={() => { setSelectedIds(new Set()); setAnchorId(null); }}
+            />
+          ) : selection.kind !== 'canopy-browse' && selection.kind !== 'shared-views' ? (
             <ToolbarControls {...toolbarProps} />
-          )}
-          {selection.kind === 'canopy-browse' && <div className="flex-1" />}
+          ) : null}
+          {(selection.kind === 'canopy-browse' || selection.kind === 'shared-views') && <div className="flex-1" />}
           <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
             <UploadZone busy={upload.busy} progress={upload.progress} onFiles={upload.upload} />
           </div>
@@ -302,6 +345,24 @@ export default function App() {
                 onDropCache={canopyActions.dropCache}
                 onUnsubscribe={canopyActions.unsubscribe}
               />
+            ) : selection.kind === 'shared-views' ? (
+              <SharedViewsView
+                kind="browse"
+                svPeers={svPeers}
+                onSubscribe={(host, name) => pokeSafe({ 'subscribe-view': { who: host, name } })}
+                onUnsubscribe={(host, name) => pokeSafe({ 'unsubscribe-view': { who: host, name } })}
+                onSelectView={(host, name) => setSelection({ kind: 'shared-view', host, name })}
+              />
+            ) : selection.kind === 'shared-view' ? (
+              <SharedViewsView
+                kind="detail"
+                listing={svPeers.get(`${selection.host}/${selection.name}`) ?? { host: selection.host, name: selection.name, tags: [], color: '#888', files: [] }}
+                viewMode={fileToolbar.viewMode}
+                onUnsubscribe={() => {
+                  pokeSafe({ 'unsubscribe-view': { who: selection.host, name: selection.name } });
+                  setSelection({ kind: 'shared-views' });
+                }}
+              />
             ) : fileToolbar.viewMode === 'list' ? (
               <FileList
                 files={visibleFiles}
@@ -309,6 +370,8 @@ export default function App() {
                 selectedIds={selectedIds}
                 onSelect={setActiveFileId}
                 onToggleSelect={toggleSelect}
+                onRangeSelect={rangeSelect}
+                onBatchSelect={batchSelect}
                 onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
                 onShare={openShareFor}
                 onDelete={deleteFile}
@@ -320,21 +383,15 @@ export default function App() {
                 selectedIds={selectedIds}
                 onSelect={setActiveFileId}
                 onToggleSelect={toggleSelect}
+                onRangeSelect={rangeSelect}
+                onBatchSelect={batchSelect}
                 onToggleStar={(id) => pokeSafe({ 'toggle-star': { id } })}
                 onShare={openShareFor}
                 onDelete={deleteFile}
               />
             )}
-            {isFileView && selectedIds.size > 0 && (
-              <BulkActionBar
-                count={selectedIds.size}
-                onDelete={bulkDelete}
-                onTag={() => setBulkTagForSelection(Array.from(selectedIds))}
-                onClear={() => setSelectedIds(new Set())}
-              />
-            )}
           </div>
-          {activeFile && !isCanopySelection && (
+          {activeFile && !isCanopySelection && !isSharedViewSelection && (
             <FileDetails
               file={activeFile}
               share={shareForActive}
