@@ -452,7 +452,7 @@ export default function App() {
               onUnshare={(token) => pokeSafe({ unshare: { token } })}
               onShowShare={(sh) => setShareDialog(sh)}
               onSetAllowed={(ships, notify) =>
-                pokeSafe({ 'set-allowed': { id: activeFile.id, ships, notify } })
+                pokeSafe({ 'set-allowed': { id: activeFile.id, ships, notify, 'base-url': window.location.origin } })
               }
               onPublish={() => setPublishingFile(activeFile)}
               onUnpublish={() => pokeSafe({ unpublish: { id: activeFile.id } })}

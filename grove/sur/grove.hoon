@@ -76,7 +76,7 @@
       [%rmview name=@t]
       [%share id=file-id]
       [%unshare token=share-token]
-      [%set-allowed id=file-id ships=(set @p) notify=?]
+      [%set-allowed id=file-id ships=(set @p) notify=? base-url=@t]
       [%offer entry=inbox-entry]
       [%accept-offer owner=@p id=file-id]
       [%decline-offer owner=@p id=file-id]

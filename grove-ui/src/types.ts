@@ -244,7 +244,7 @@ export type GroveAction =
   | { 'set-description': { id: FileId; description: string } }
   | { share: { id: FileId } }
   | { unshare: { token: ShareToken } }
-  | { 'set-allowed': { id: FileId; ships: string[]; notify: boolean } }
+  | { 'set-allowed': { id: FileId; ships: string[]; notify: boolean; 'base-url': string } }
   | { mkview: { name: string; tags: string[]; color: string } }
   | { rmview: { name: string } }
   | { 'accept-offer': { owner: string; id: FileId } }

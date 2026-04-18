@@ -350,7 +350,7 @@
         %+  turn  ~(tap in added)
         |=  who=@p
         ^-  card
-        (dm-notify who new-tk name.fm)
+        (dm-notify who new-tk name.fm base-url.a)
       =/  new-s
         ?:  ?|  !notify.a  ?=(^ tk-existing)  =(0 ~(wyt in added))  ==
           s
@@ -847,12 +847,17 @@
     [%give %fact ~[/shared-view/(scot %tas nm)] %grove-view-listing !>(`grove-view-listing`lst)]~
   ::
   ++  dm-notify
-    |=  [target=@p tk=share-token fname=@t]
+    |=  [target=@p tk=share-token fname=@t burl=@t]
     ^-  card
+    =/  url-tape=tape
+      ;:  weld
+        (trip burl)  "/grove-share/"
+        (trip (scot %uv tk))  "/"  (trip fname)
+      ==
     =/  msg-tape=tape
       ;:  weld
         (trip (scot %p our.bowl))  " shared '"  (trip fname)
-        "' with you via Grove. Open Grove on their ship to download it."
+        "' via Grove: "  url-tape
       ==
     =/  msg=@t  (crip msg-tape)
     =/  sent=@da  now.bowl
