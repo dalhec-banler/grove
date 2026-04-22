@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { InboxEntry, CanopyMode, Selection } from './types';
+import type { InboxEntry, CatalogMode, Selection, GroupFlag } from './types';
 import { pokeSafe } from './api';
 
 // Inbox action callbacks — all pure pokeSafe wrappers.
@@ -17,55 +17,80 @@ export function useInboxActions() {
   }), []);
 }
 
-// Canopy action callbacks — most are pure pokeSafe, a few update local state.
-export function useCanopyActions(
+// Catalog action callbacks
+export function useCatalogActions(
   setSelection: (s: Selection) => void,
 ) {
-  const unpublish = useCallback(
-    (id: string) => pokeSafe({ unpublish: { id } }),
-    [],
-  );
-
-  const setMode = useCallback(
-    (m: CanopyMode) => {
-      pokeSafe({ 'set-canopy-mode': { mode: m } });
-    },
-    [],
-  );
-
-  const setName = useCallback(
-    (name: string) => pokeSafe({ 'set-canopy-name': { name } }),
-    [],
-  );
-
-  const addFriend = useCallback(
-    (who: string) => pokeSafe({ 'add-friend': { who } }),
-    [],
-  );
-
-  const removeFriend = useCallback(
-    (who: string) => pokeSafe({ 'remove-friend': { who } }),
-    [],
-  );
-
-  const setGroup = useCallback(
-    (flag: { host: string; name: string } | null) =>
-      pokeSafe({ 'set-canopy-group': { flag: flag ?? null } }),
-    [],
-  );
-
-  const subscribe = useCallback(
-    (ship: string) => {
-      pokeSafe({ 'subscribe-to': { who: ship } });
-      setSelection({ kind: 'canopy-peer', ship });
+  const createCatalog = useCallback(
+    (id: string, name: string, description: string, mode: CatalogMode) => {
+      pokeSafe({ 'create-catalog': { id, name, description, mode } });
+      setSelection({ kind: 'catalog', catalogId: id });
     },
     [setSelection],
   );
 
-  const unsubscribe = useCallback(
-    (ship: string) => {
-      pokeSafe({ 'unsubscribe-from': { who: ship } });
-      setSelection({ kind: 'canopy-browse' });
+  const deleteCatalog = useCallback(
+    (id: string) => {
+      pokeSafe({ 'delete-catalog': { id } });
+      setSelection({ kind: 'catalogs' });
+    },
+    [setSelection],
+  );
+
+  const updateCatalog = useCallback(
+    (id: string, name: string, description: string) =>
+      pokeSafe({ 'update-catalog': { id, name, description } }),
+    [],
+  );
+
+  const setCatalogMode = useCallback(
+    (id: string, mode: CatalogMode) =>
+      pokeSafe({ 'set-catalog-mode': { id, mode } }),
+    [],
+  );
+
+  const setCatalogGroup = useCallback(
+    (id: string, flag: GroupFlag | null) =>
+      pokeSafe({ 'set-catalog-group': { id, flag } }),
+    [],
+  );
+
+  const addCatalogFriend = useCallback(
+    (id: string, who: string) =>
+      pokeSafe({ 'add-catalog-friend': { id, who } }),
+    [],
+  );
+
+  const removeCatalogFriend = useCallback(
+    (id: string, who: string) =>
+      pokeSafe({ 'remove-catalog-friend': { id, who } }),
+    [],
+  );
+
+  const addToCatalog = useCallback(
+    (catalogId: string, fileId: string, displayName: string, tags: string[], description: string) =>
+      pokeSafe({ 'add-to-catalog': { id: catalogId, 'file-id': fileId, 'display-name': displayName, tags, description } }),
+    [],
+  );
+
+  const removeFromCatalog = useCallback(
+    (catalogId: string, fileId: string) =>
+      pokeSafe({ 'remove-from-catalog': { id: catalogId, 'file-id': fileId } }),
+    [],
+  );
+
+  const subscribeCatalog = useCallback(
+    (who: string, catalogId: string) => {
+      pokeSafe({ 'subscribe-catalog': { who, 'catalog-id': catalogId } });
+      setSelection({ kind: 'browse-catalog', host: who, catalogId });
+    },
+    [setSelection],
+  );
+
+  const unsubscribeCatalog = useCallback(
+    (who: string, catalogId: string) => {
+      pokeSafe({ 'unsubscribe-catalog': { who, 'catalog-id': catalogId } });
+      setSelection({ kind: 'browse' });
     },
     [setSelection],
   );
@@ -86,7 +111,10 @@ export function useCanopyActions(
   );
 
   return {
-    unpublish, setMode, setName, addFriend, removeFriend, setGroup,
-    subscribe, unsubscribe, fetchEntry, plantEntry, dropCache,
+    createCatalog, deleteCatalog, updateCatalog,
+    setCatalogMode, setCatalogGroup, addCatalogFriend, removeCatalogFriend,
+    addToCatalog, removeFromCatalog,
+    subscribeCatalog, unsubscribeCatalog,
+    fetchEntry, plantEntry, dropCache,
   };
 }

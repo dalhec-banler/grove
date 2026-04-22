@@ -1,22 +1,22 @@
 import Urbit from '@urbit/http-api';
 import type {
   FileMeta, View, Share, Update, InboxEntry, Trust,
-  CanopyEntry, CanopyConfig, CanopyListing, CanopyMode, GroupInfo,
-  GroveAction, CanopySearchHit, GroveViewListing, GroupFlag,
-  RawFileMeta, RawInboxEntry, RawCanopyEntry, RawCanopyConfig, RawCanopyListing,
-  RawView, RawShare, RawCanopySearchHit, RawGroupInfo, RawGroveViewListing,
+  CanopyEntry, CatalogConfig, CatalogListing, CatalogMode, GroupInfo,
+  GroveAction, CatalogSearchHit, Catalog, CatalogSub, GroupFlag,
+  RawFileMeta, RawInboxEntry, RawCanopyEntry, RawCatalogConfig, RawCatalogListing,
+  RawView, RawShare, RawCatalogSearchHit, RawGroupInfo,
 } from './types';
 
 declare global {
   interface Window { ship?: string }
 }
 
-const CANOPY_MODES: readonly CanopyMode[] = ['open', 'friends', 'group'];
-function isCanopyMode(v: unknown): v is CanopyMode {
-  return typeof v === 'string' && (CANOPY_MODES as readonly string[]).includes(v);
+const CATALOG_MODES: readonly CatalogMode[] = ['public', 'pals', 'group'];
+function isCatalogMode(v: unknown): v is CatalogMode {
+  return typeof v === 'string' && (CATALOG_MODES as readonly string[]).includes(v);
 }
-function parseCanopyMode(v: unknown): CanopyMode {
-  return isCanopyMode(v) ? v : 'open';
+function parseCatalogMode(v: unknown): CatalogMode {
+  return isCatalogMode(v) ? v : 'public';
 }
 
 // Error notification emitter — decouples API from browser UI (no alert())
@@ -44,7 +44,7 @@ export function fileFromJson(o: RawFileMeta): FileMeta {
   return {
     id: o.id,
     name: o.name,
-    fileMark: o['file-mark'],
+    fileMark: o['file-mark'] ?? o.fileMark ?? '',
     size: o.size,
     tags: o.tags ?? [],
     created: o.created,
@@ -52,6 +52,7 @@ export function fileFromJson(o: RawFileMeta): FileMeta {
     description: o.description ?? '',
     starred: !!o.starred,
     allowed: o.allowed ?? [],
+    inCatalogs: o.inCatalogs ?? [],
   };
 }
 
@@ -64,17 +65,7 @@ export async function scryViews(): Promise<View[]> {
   const raw = await getApi().scry<unknown>({ app: 'grove', path: '/views' });
   return (Array.isArray(raw) ? raw : []).map((v) => {
     const r = v as RawView;
-    const view: View = { name: r.name, tags: r.tags ?? [], color: r.color };
-    if (r.shared && typeof r.shared === 'object') {
-      const s = r.shared as { allowed?: string[]; 'group-flag'?: { host: string; name: string } | null };
-      view.shared = {
-        allowed: s.allowed ?? [],
-        groupFlag: s['group-flag'] && s['group-flag'].host
-          ? { host: s['group-flag'].host, name: s['group-flag'].name }
-          : null,
-      };
-    }
-    return view;
+    return { name: r.name, tags: r.tags ?? [], color: r.color };
   });
 }
 
@@ -124,68 +115,88 @@ export function canopyEntryFromJson(o: RawCanopyEntry): CanopyEntry {
   };
 }
 
-function canopyConfigFromJson(o: RawCanopyConfig): CanopyConfig {
+function catalogConfigFromJson(o: RawCatalogConfig): CatalogConfig {
   return {
-    mode: parseCanopyMode(o.mode),
     name: o.name ?? '',
+    description: o.description ?? '',
+    mode: parseCatalogMode(o.mode),
     friends: o.friends ?? [],
     groupFlag: o['group-flag'] && o['group-flag'].host
       ? { host: o['group-flag'].host, name: o['group-flag'].name }
       : null,
+    files: o.files ?? [],
+    created: o.created ?? '',
+    modified: o.modified ?? '',
   };
 }
 
-function canopyListingFromJson(o: RawCanopyListing): CanopyListing {
+function catalogListingFromJson(o: RawCatalogListing): CatalogListing {
   return {
     host: o.host,
+    catalogId: o.catalogId ?? o['catalog-id'] ?? '',
     name: o.name ?? '',
-    mode: parseCanopyMode(o.mode),
+    description: o.description ?? '',
+    mode: parseCatalogMode(o.mode),
     entries: (o.entries ?? []).map(canopyEntryFromJson),
   };
 }
 
-export async function scryCanopyEntries(): Promise<CanopyEntry[]> {
-  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/entries' });
+export async function scryCatalogs(): Promise<Catalog[]> {
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/catalogs' });
+  return (Array.isArray(raw) ? raw : []).map((r) => {
+    const o = r as { catalogId?: string; config?: RawCatalogConfig };
+    return {
+      catalogId: o.catalogId ?? '',
+      config: catalogConfigFromJson((o.config ?? {}) as RawCatalogConfig),
+    };
+  });
+}
+
+export async function scryCatalogConfig(catalogId: string): Promise<CatalogConfig | null> {
+  try {
+    const raw = await getApi().scry<unknown>({ app: 'grove', path: `/catalog/${catalogId}/config` });
+    if (!raw) return null;
+    return catalogConfigFromJson(raw as RawCatalogConfig);
+  } catch { return null; }
+}
+
+export async function scryCatalogEntries(catalogId: string): Promise<CanopyEntry[]> {
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: `/catalog/${catalogId}/entries` });
   return (Array.isArray(raw) ? raw : []).map((r) => canopyEntryFromJson(r as RawCanopyEntry));
 }
 
-export async function scryCanopyConfig(): Promise<CanopyConfig> {
-  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/config' });
-  return canopyConfigFromJson((raw ?? {}) as RawCanopyConfig);
+export async function scryCatalogPeers(): Promise<CatalogListing[]> {
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/catalog-peers' });
+  return (Array.isArray(raw) ? raw : []).map((r) => catalogListingFromJson(r as RawCatalogListing));
 }
 
-export async function scryCanopyPeers(): Promise<CanopyListing[]> {
-  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/peers' });
-  return (Array.isArray(raw) ? raw : []).map((r) => canopyListingFromJson(r as RawCanopyListing));
+export async function scryCatalogSubs(): Promise<CatalogSub[]> {
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/catalog-subs' });
+  return (Array.isArray(raw) ? raw : []).map((r) => {
+    const o = r as { host?: string; catalogId?: string };
+    return { host: o.host ?? '', catalogId: o.catalogId ?? '' };
+  });
 }
 
-/** Returns null on 404 — peer may not have canopy or may be unreachable. */
-export async function scryCanopyPeer(ship: string): Promise<CanopyListing | null> {
-  const s = ship.startsWith('~') ? ship.slice(1) : ship;
-  try {
-    const raw = await getApi().scry<unknown>({ app: 'grove', path: `/canopy/peer/~${s}` });
-    if (!raw) return null;
-    return canopyListingFromJson(raw as RawCanopyListing);
-  } catch (e: any) {
-    if (e?.status === 404 || e?.message?.includes('404')) return null;
-    throw e;
-  }
-}
-
-export async function scryCanopySearch(term: string): Promise<CanopySearchHit[]> {
+export async function scryCatalogSearch(term: string): Promise<CatalogSearchHit[]> {
   const t = term.trim();
   if (!t) return [];
-  const raw = await getApi().scry<unknown>({ app: 'grove', path: `/canopy/search/${encodeURIComponent(t)}` });
+  const raw = await getApi().scry<unknown>({ app: 'grove', path: `/catalog/search/${encodeURIComponent(t)}` });
   return (Array.isArray(raw) ? raw : []).map((h) => {
-    const r = h as RawCanopySearchHit;
-    return { host: r.host, entry: canopyEntryFromJson(r.entry) };
+    const r = h as RawCatalogSearchHit;
+    return {
+      host: r.host,
+      catalogId: r.catalogId ?? r['catalog-id'] ?? '',
+      catalogName: r.catalogName ?? r['catalog-name'] ?? '',
+      entry: canopyEntryFromJson(r.entry),
+    };
   });
 }
 
 /** Returns [] on 404 — groups app may not be installed. */
 export async function scryGroups(): Promise<GroupInfo[]> {
   try {
-    const raw = await getApi().scry<unknown>({ app: 'grove', path: '/canopy/groups' });
+    const raw = await getApi().scry<unknown>({ app: 'grove', path: '/catalog/groups' });
     return (Array.isArray(raw) ? raw : []).map((g) => {
       const r = g as RawGroupInfo;
       return { host: r.host, name: r.name, title: r.title ?? '', members: r.members ?? 0 };
@@ -196,26 +207,11 @@ export async function scryGroups(): Promise<GroupInfo[]> {
   }
 }
 
-function gvlFromJson(o: RawGroveViewListing): GroveViewListing {
-  return {
-    host: o.host,
-    name: o.name ?? '',
-    tags: o.tags ?? [],
-    color: o.color ?? '',
-    files: (o.files ?? []).map((r) => fileFromJson(r as RawFileMeta)),
-  };
-}
-
 function parseGroupFlag(o: unknown): GroupFlag | null {
   if (!o || typeof o !== 'object') return null;
   const gf = o as { host?: string; name?: string };
   if (!gf.host) return null;
   return { host: gf.host, name: gf.name ?? '' };
-}
-
-export async function scrySharedViewPeers(): Promise<GroveViewListing[]> {
-  const raw = await getApi().scry<unknown>({ app: 'grove', path: '/shared-view-peers' });
-  return (Array.isArray(raw) ? raw : []).map((r) => gvlFromJson(r as RawGroveViewListing));
 }
 
 export function poke(action: GroveAction): Promise<void> {
@@ -326,29 +322,20 @@ export function normalizeUpdate(data: any): Update | null {
       return { type: 'cacheUpdated', owner: data.owner, meta: fileFromJson(data.meta) };
     case 'cacheRemoved':
       return { type: 'cacheRemoved', owner: data.owner, fileId: data.fileId };
-    case 'canopyEntryAdded':
-      return { type: 'canopyEntryAdded', entry: canopyEntryFromJson(data.entry) };
-    case 'canopyEntryRemoved':
-      return { type: 'canopyEntryRemoved', fileId: data.fileId };
-    case 'canopyConfigUpdated':
-      return { type: 'canopyConfigUpdated', config: canopyConfigFromJson(data.config) };
-    case 'canopyPeerUpdated':
-      return { type: 'canopyPeerUpdated', listing: canopyListingFromJson(data.listing) };
-    case 'canopyPeerRemoved':
-      return { type: 'canopyPeerRemoved', host: data.host };
-    case 'viewShared':
-      return {
-        type: 'viewShared',
-        name: data.name,
-        allowed: data.allowed ?? [],
-        groupFlag: parseGroupFlag(data.groupFlag ?? data['group-flag']),
-      };
-    case 'viewUnshared':
-      return { type: 'viewUnshared', name: data.name };
-    case 'sharedViewUpdated':
-      return { type: 'sharedViewUpdated', listing: gvlFromJson(data.listing) };
-    case 'sharedViewRemoved':
-      return { type: 'sharedViewRemoved', host: data.host, name: data.name };
+    case 'catalogCreated':
+      return { type: 'catalogCreated', catalogId: data.catalogId, config: catalogConfigFromJson(data.config) };
+    case 'catalogDeleted':
+      return { type: 'catalogDeleted', catalogId: data.catalogId };
+    case 'catalogUpdated':
+      return { type: 'catalogUpdated', catalogId: data.catalogId, config: catalogConfigFromJson(data.config) };
+    case 'catalogFileAdded':
+      return { type: 'catalogFileAdded', catalogId: data.catalogId, fileId: data.fileId };
+    case 'catalogFileRemoved':
+      return { type: 'catalogFileRemoved', catalogId: data.catalogId, fileId: data.fileId };
+    case 'catalogPeerUpdated':
+      return { type: 'catalogPeerUpdated', listing: catalogListingFromJson(data.listing) };
+    case 'catalogPeerRemoved':
+      return { type: 'catalogPeerRemoved', host: data.host, catalogId: data.catalogId };
   }
   console.warn('[normalizeUpdate] unrecognized update type:', data.type);
   return null;
@@ -366,4 +353,3 @@ export function fileToBase64(file: File): Promise<string> {
     r.readAsDataURL(file);
   });
 }
-

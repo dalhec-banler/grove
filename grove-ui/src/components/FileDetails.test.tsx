@@ -2,19 +2,23 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import FileDetails from './FileDetails';
-import type { FileMeta } from '../types';
+import type { FileMeta, CatalogConfig } from '../types';
 
 const file: FileMeta = {
   id: 'f1', name: 'report.pdf', fileMark: 'pdf', size: 5120,
   tags: ['work'], created: '~2026.1.1..10.30.00..0000', modified: '~2026.1.2..14.00.00..0000',
-  description: '', starred: false, allowed: ['~zod'],
+  description: '', starred: false, allowed: ['~zod'], inCatalogs: ['music'],
 };
+
+const catalogs = new Map<string, CatalogConfig>([
+  ['music', { name: 'Music', description: '', mode: 'public', friends: [], groupFlag: null, files: ['f1'], created: '', modified: '' }],
+]);
 
 function renderDetails(overrides = {}) {
   const props = {
     file,
     share: null,
-    published: false,
+    catalogs,
     onClose: vi.fn(),
     onRename: vi.fn(),
     onAddTags: vi.fn(),
@@ -24,7 +28,7 @@ function renderDetails(overrides = {}) {
     onShowShare: vi.fn(),
     onSetAllowed: vi.fn(),
     onPublish: vi.fn(),
-    onUnpublish: vi.fn(),
+    onRemoveFromCatalog: vi.fn(),
     ...overrides,
   };
   render(<FileDetails {...props} />);
@@ -57,15 +61,12 @@ describe('FileDetails', () => {
   it('calls onClose when close button is clicked', () => {
     const props = renderDetails();
     const closeButtons = screen.getAllByText('×');
-    // The first × is the close button in the header
     fireEvent.click(closeButtons[0]);
     expect(props.onClose).toHaveBeenCalled();
   });
 
   it('calls onRemoveTags when tag remove button is clicked', () => {
     const props = renderDetails();
-    // The × buttons after the first one: tag remove, then ship remove
-    // Find the tag chip's remove button specifically
     const tagChip = screen.getByText('work').closest('span');
     const removeBtn = tagChip!.querySelector('button')!;
     fireEvent.click(removeBtn);
@@ -89,15 +90,15 @@ describe('FileDetails', () => {
     expect(props.onAddTags).toHaveBeenCalledWith(['urgent']);
   });
 
-  it('calls onPublish when publish button is clicked', () => {
-    const props = renderDetails();
-    fireEvent.click(screen.getByText('Publish to canopy…'));
-    expect(props.onPublish).toHaveBeenCalled();
+  it('shows catalog membership', () => {
+    renderDetails();
+    expect(screen.getByText('Music')).toBeTruthy();
   });
 
-  it('shows published state when published is true', () => {
-    renderDetails({ published: true });
-    expect(screen.getByText('Published to your canopy')).toBeTruthy();
+  it('calls onPublish when add to catalog button is clicked', () => {
+    const props = renderDetails();
+    fireEvent.click(screen.getByText('Add to catalog...'));
+    expect(props.onPublish).toHaveBeenCalled();
   });
 
   it('toggles public link checkbox and calls onShare', () => {

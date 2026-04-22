@@ -1,30 +1,22 @@
 import { useState } from 'react';
-import type { View, GroupInfo, SharedViewConfig } from '../types';
+import type { View } from '../types';
 import { addTag } from '../format';
 import Backdrop from './Backdrop';
 
 interface Props {
   initial: View | null;
   allTags: string[];
-  groups: GroupInfo[];
   onClose: () => void;
-  onSave: (name: string, tags: string[], color: string, shared: SharedViewConfig | null) => void;
+  onSave: (name: string, tags: string[], color: string) => void;
 }
 
 const PALETTE = ['#3A6BC5', '#D97706', '#059669', '#DC2626', '#7C3AED', '#DB2777', '#0EA5E9', '#65A30D'];
 
-export default function ViewModal({ initial, allTags, groups, onClose, onSave }: Props) {
+export default function ViewModal({ initial, allTags, onClose, onSave }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagInput, setTagInput] = useState('');
   const [color, setColor] = useState(initial?.color ?? PALETTE[0]);
-
-  const [sharingEnabled, setSharingEnabled] = useState(!!initial?.shared);
-  const [allowedInput, setAllowedInput] = useState('');
-  const [allowedShips, setAllowedShips] = useState<string[]>(initial?.shared?.allowed ?? []);
-  const [selectedGroup, setSelectedGroup] = useState<string>(
-    initial?.shared?.groupFlag ? `${initial.shared.groupFlag.host}/${initial.shared.groupFlag.name}` : ''
-  );
 
   function handleAddTag(t: string) {
     const updated = addTag(tags, t);
@@ -33,33 +25,15 @@ export default function ViewModal({ initial, allTags, groups, onClose, onSave }:
     setTagInput('');
   }
 
-  function handleAddShip() {
-    const ship = allowedInput.trim();
-    if (!ship || allowedShips.includes(ship)) return;
-    setAllowedShips([...allowedShips, ship]);
-    setAllowedInput('');
-  }
-
   const disabled = !name.trim() || tags.length === 0;
 
   function handleSave() {
-    let shared: SharedViewConfig | null = null;
-    if (sharingEnabled) {
-      let groupFlag = null;
-      if (selectedGroup) {
-        const idx = selectedGroup.indexOf('/');
-        if (idx > 0) {
-          groupFlag = { host: selectedGroup.slice(0, idx), name: selectedGroup.slice(idx + 1) };
-        }
-      }
-      shared = { allowed: allowedShips, groupFlag };
-    }
-    onSave(name.trim(), tags, color, shared);
+    onSave(name.trim(), tags, color);
   }
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-surface rounded-lg shadow-xl w-[420px] p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-lg shadow-xl w-[90vw] max-w-[420px] p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-medium mb-4">{initial ? 'Edit view' : 'New view'}</h2>
         <label className="block text-xs text-muted mb-1">Name</label>
         <input
@@ -107,61 +81,6 @@ export default function ViewModal({ initial, allTags, groups, onClose, onSave }:
               style={{ background: c }}
             />
           ))}
-        </div>
-
-        <div className="border-t border-border pt-3 mb-4">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={sharingEnabled}
-              onChange={(e) => setSharingEnabled(e.target.checked)}
-              className="accent-accent"
-            />
-            Share this view
-          </label>
-          {sharingEnabled && (
-            <div className="mt-3 space-y-3 pl-1">
-              <div>
-                <label className="block text-xs text-muted mb-1">Allowed ships</label>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {allowedShips.map((s) => (
-                    <span key={s} className="text-xs px-2 py-0.5 rounded bg-accent-soft text-accent flex items-center gap-1 font-mono">
-                      {s}
-                      <button onClick={() => setAllowedShips(allowedShips.filter((x) => x !== s))} className="hover:text-ink">×</button>
-                    </span>
-                  ))}
-                  {allowedShips.length === 0 && <span className="text-xs text-faint">None yet</span>}
-                </div>
-                <input
-                  value={allowedInput}
-                  onChange={(e) => setAllowedInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddShip(); } }}
-                  placeholder="~sampel-palnet"
-                  className="w-full border border-border rounded px-2 py-1 text-sm font-mono"
-                />
-              </div>
-              {groups.length > 0 && (
-                <div>
-                  <label className="block text-xs text-muted mb-1">Or share with a group</label>
-                  <select
-                    value={selectedGroup}
-                    onChange={(e) => setSelectedGroup(e.target.value)}
-                    className="w-full border border-border rounded px-2 py-1.5 text-sm"
-                  >
-                    <option value="">No group</option>
-                    {groups.map((g) => (
-                      <option key={`${g.host}/${g.name}`} value={`${g.host}/${g.name}`}>
-                        {g.title || g.name} ({g.members} members)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <p className="text-xs text-faint">
-                Allowed ships and group members can subscribe to see files matching this view.
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="flex justify-end gap-2">

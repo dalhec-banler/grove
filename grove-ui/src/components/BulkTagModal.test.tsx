@@ -5,8 +5,8 @@ import BulkTagModal from './BulkTagModal';
 import type { FileMeta } from '../types';
 
 const files: FileMeta[] = [
-  { id: 'f1', name: 'a.png', fileMark: 'png', size: 100, tags: [], created: '~2026.1.1', modified: '~2026.1.1', description: '', starred: false, allowed: [] },
-  { id: 'f2', name: 'b.pdf', fileMark: 'pdf', size: 200, tags: [], created: '~2026.1.1', modified: '~2026.1.1', description: '', starred: false, allowed: [] },
+  { id: 'f1', name: 'a.png', fileMark: 'png', size: 100, tags: [], created: '~2026.1.1', modified: '~2026.1.1', description: '', starred: false, allowed: [], inCatalogs: [] },
+  { id: 'f2', name: 'b.pdf', fileMark: 'pdf', size: 200, tags: [], created: '~2026.1.1', modified: '~2026.1.1', description: '', starred: false, allowed: [], inCatalogs: [] },
 ];
 
 function renderModal(overrides = {}) {

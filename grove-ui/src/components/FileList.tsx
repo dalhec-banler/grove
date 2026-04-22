@@ -92,10 +92,10 @@ export default function FileList({
             <th className="w-8 pl-3"></th>
             <th className="w-8"></th>
             <th className="text-left font-normal px-3 py-2">Name</th>
-            <th className="text-left font-normal px-3 py-2 w-48">Tags</th>
-            <th className="text-right font-normal px-3 py-2 w-24">Size</th>
-            <th className="text-right font-normal px-3 py-2 w-36">Modified</th>
-            <th className="w-28"></th>
+            <th className="text-left font-normal px-3 py-2 w-48 hidden md:table-cell">Tags</th>
+            <th className="text-right font-normal px-3 py-2 w-24 hidden md:table-cell">Size</th>
+            <th className="text-right font-normal px-3 py-2 w-36 hidden md:table-cell">Modified</th>
+            <th className="w-28 hidden md:table-cell"></th>
           </tr>
         </thead>
         <tbody>
@@ -147,7 +147,7 @@ export default function FileList({
                     <span className="truncate">{f.name}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 hidden md:table-cell">
                   <div className="flex flex-wrap gap-1">
                     {f.tags.slice(0, 3).map((t) => (
                       <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-bg border border-border text-muted">{t}</span>
@@ -155,10 +155,10 @@ export default function FileList({
                     {f.tags.length > 3 && <span className="text-xs text-faint">+{f.tags.length - 3}</span>}
                   </div>
                 </td>
-                <td className="px-3 py-2 text-right text-muted">{formatBytes(f.size)}</td>
-                <td className="px-3 py-2 text-right text-muted">{formatDate(f.modified)}</td>
-                <td className="pr-4">
-                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100">
+                <td className="px-3 py-2 text-right text-muted hidden md:table-cell">{formatBytes(f.size)}</td>
+                <td className="px-3 py-2 text-right text-muted hidden md:table-cell">{formatDate(f.modified)}</td>
+                <td className="pr-4 hidden md:table-cell">
+                  <div className="flex justify-end gap-2 md:opacity-0 md:group-hover:opacity-100">
                     <a
                       href={fileUrl(f.id)}
                       download={f.name}

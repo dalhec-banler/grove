@@ -3,6 +3,7 @@
 +$  tag          @tas
 +$  view-id      @uvH
 +$  share-token  @uvH
++$  catalog-id   @tas
 ::
 +$  file-meta
   $:  id=file-id
@@ -25,8 +26,37 @@
       offered=@da
       accepted=?
   ==
+::  catalog access modes
+::  %public  - anyone who discovers you can see it
+::  %pals    - your Pals + manual friend list
+::  %group   - members of a specific Tlon group
 ::
-+$  canopy-mode  ?(%open %friends %group)
++$  catalog-mode  ?(%public %pals %group)
+::
+::  per-catalog configuration
+::
++$  catalog-config
+  $:  name=@t
+      description=@t
+      mode=catalog-mode
+      friends=(set @p)
+      group-flag=(unit [ship term])
+      files=(set file-id)
+      created=@da
+      modified=@da
+  ==
+::
+::  publish overrides — display name/description/tags for published files
+::  global per file-id (same across all catalogs)
+::
++$  publish-meta
+  $:  display-name=@t
+      description=@t
+      tags=(set tag)
+      published=@da
+  ==
+::
+::  wire format for a single entry within a catalog listing
 ::
 +$  canopy-entry
   $:  id=file-id
@@ -38,31 +68,15 @@
       description=@t
   ==
 ::
-+$  canopy-config
-  $:  mode=canopy-mode
-      friends=(set @p)
-      name=@t
-      group-flag=(unit [ship term])
-  ==
+::  catalog listing sent to subscribers
 ::
-+$  canopy-listing
++$  catalog-listing
   $:  host=@p
+      catalog-id=@tas
       name=@t
-      mode=canopy-mode
+      description=@t
+      mode=catalog-mode
       entries=(list canopy-entry)
-  ==
-::
-+$  shared-view-config
-  $:  allowed=(set @p)
-      group-flag=(unit [ship term])
-  ==
-::
-+$  grove-view-listing
-  $:  host=@p
-      name=@t
-      tags=(list tag)
-      color=@t
-      files=(list file-meta)
   ==
 ::
 +$  action
@@ -87,22 +101,18 @@
       [%fetch owner=@p id=file-id]
       [%plant owner=@p id=file-id]
       [%drop-cache owner=@p id=file-id]
-      ::  canopy
-      [%publish id=file-id display-name=@t tags=(set tag) description=@t]
-      [%unpublish id=file-id]
-      [%set-canopy-mode mode=canopy-mode]
-      [%add-friend who=@p]
-      [%remove-friend who=@p]
-      [%set-canopy-name name=@t]
-      [%set-canopy-group flag=(unit [ship term])]
-      [%subscribe-to who=@p]
-      [%unsubscribe-from who=@p]
-      ::  shared views
-      [%share-view name=@t allowed=(set @p) group-flag=(unit [ship term])]
-      [%unshare-view name=@t]
-      [%subscribe-view who=@p name=@t]
-      [%unsubscribe-view who=@p name=@t]
-      [%sv-invite host=@p name=@t]
+      ::  catalogs
+      [%create-catalog id=catalog-id name=@t description=@t mode=catalog-mode]
+      [%delete-catalog id=catalog-id]
+      [%update-catalog id=catalog-id name=@t description=@t]
+      [%set-catalog-mode id=catalog-id mode=catalog-mode]
+      [%set-catalog-group id=catalog-id flag=(unit [ship term])]
+      [%add-catalog-friend id=catalog-id who=@p]
+      [%remove-catalog-friend id=catalog-id who=@p]
+      [%add-to-catalog id=catalog-id file-id=file-id display-name=@t tags=(set tag) description=@t]
+      [%remove-from-catalog id=catalog-id file-id=file-id]
+      [%subscribe-catalog who=@p catalog-id=catalog-id]
+      [%unsubscribe-catalog who=@p catalog-id=catalog-id]
   ==
 ::
 +$  update
@@ -120,17 +130,14 @@
       [%trusted-updated trusted=(set @p) blocked=(set @p)]
       [%cache-updated owner=@p =file-meta]
       [%cache-removed owner=@p id=file-id]
-      ::  canopy
-      [%canopy-entry-added =canopy-entry]
-      [%canopy-entry-removed id=file-id]
-      [%canopy-config-updated =canopy-config]
-      [%canopy-peer-updated =canopy-listing]
-      [%canopy-peer-removed host=@p]
-      ::  shared views
-      [%view-shared name=@t allowed=(set @p) group-flag=(unit [ship term])]
-      [%view-unshared name=@t]
-      [%shared-view-updated =grove-view-listing]
-      [%shared-view-removed host=@p name=@t]
+      ::  catalogs
+      [%catalog-created id=catalog-id config=catalog-config]
+      [%catalog-deleted id=catalog-id]
+      [%catalog-updated id=catalog-id config=catalog-config]
+      [%catalog-file-added catalog-id=catalog-id file-id=file-id]
+      [%catalog-file-removed catalog-id=catalog-id file-id=file-id]
+      [%catalog-peer-updated =catalog-listing]
+      [%catalog-peer-removed host=@p catalog-id=catalog-id]
   ==
 ::
 +$  grove-remote

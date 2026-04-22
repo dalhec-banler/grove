@@ -94,90 +94,73 @@
           ['fileId' s+(scot %uv id.upd)]
       ==
     ::
-        %canopy-entry-added
+        %catalog-created
       %-  pairs
-      :~  ['type' s+'canopyEntryAdded']
-          ['entry' (canopy-entry-json canopy-entry.upd)]
+      :~  ['type' s+'catalogCreated']
+          ['catalogId' s+(crip (trip id.upd))]
+          ['config' (catalog-config-json config.upd)]
       ==
     ::
-        %canopy-entry-removed
+        %catalog-deleted
       %-  pairs
-      :~  ['type' s+'canopyEntryRemoved']
-          ['fileId' s+(scot %uv id.upd)]
+      :~  ['type' s+'catalogDeleted']
+          ['catalogId' s+(crip (trip id.upd))]
       ==
     ::
-        %canopy-config-updated
+        %catalog-updated
       %-  pairs
-      :~  ['type' s+'canopyConfigUpdated']
-          ['config' (canopy-config-json canopy-config.upd)]
+      :~  ['type' s+'catalogUpdated']
+          ['catalogId' s+(crip (trip id.upd))]
+          ['config' (catalog-config-json config.upd)]
       ==
     ::
-        %canopy-peer-updated
+        %catalog-file-added
       %-  pairs
-      :~  ['type' s+'canopyPeerUpdated']
-          ['listing' (canopy-listing-json canopy-listing.upd)]
+      :~  ['type' s+'catalogFileAdded']
+          ['catalogId' s+(crip (trip catalog-id.upd))]
+          ['fileId' s+(scot %uv file-id.upd)]
       ==
     ::
-        %canopy-peer-removed
+        %catalog-file-removed
       %-  pairs
-      :~  ['type' s+'canopyPeerRemoved']
+      :~  ['type' s+'catalogFileRemoved']
+          ['catalogId' s+(crip (trip catalog-id.upd))]
+          ['fileId' s+(scot %uv file-id.upd)]
+      ==
+    ::
+        %catalog-peer-updated
+      %-  pairs
+      :~  ['type' s+'catalogPeerUpdated']
+          ['listing' (catalog-listing-json catalog-listing.upd)]
+      ==
+    ::
+        %catalog-peer-removed
+      %-  pairs
+      :~  ['type' s+'catalogPeerRemoved']
           ['host' s+(scot %p host.upd)]
+          ['catalogId' s+(crip (trip catalog-id.upd))]
       ==
+    ==
     ::
-        %view-shared
+    ++  catalog-config-json
+      |=  c=catalog-config
+      ^-  ^json
       %-  pairs
-      :~  ['type' s+'viewShared']
-          ['name' s+name.upd]
-          ['allowed' [%a (turn ~(tap in allowed.upd) |=(p=@p s+(scot %p p)))]]
+      :~  ['name' s+name.c]
+          ['description' s+description.c]
+          ['mode' s+(crip (trip mode.c))]
+          ['friends' [%a (turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))]]
+          ['files' [%a (turn ~(tap in files.c) |=(fid=file-id s+(scot %uv fid)))]]
+          ['created' s+(scot %da created.c)]
+          ['modified' s+(scot %da modified.c)]
           :-  'group-flag'
-          ?~  group-flag.upd  ~
-          =/  gf  u.group-flag.upd
+          ?~  group-flag.c  ~
+          =/  gf  u.group-flag.c
           %-  pairs
           :~  ['host' s+(scot %p -.gf)]
               ['name' s++.gf]
           ==
       ==
-    ::
-        %view-unshared
-      %-  pairs
-      :~  ['type' s+'viewUnshared']
-          ['name' s+name.upd]
-      ==
-    ::
-        %shared-view-updated
-      %-  pairs
-      :~  ['type' s+'sharedViewUpdated']
-          :-  'listing'
-          %-  pairs
-          :~  ['host' s+(scot %p host.grove-view-listing.upd)]
-              ['name' s+name.grove-view-listing.upd]
-              ['tags' [%a (turn tags.grove-view-listing.upd |=(t=tag s+(crip (trip t))))]]
-              ['color' s+color.grove-view-listing.upd]
-              :-  'files'
-              :-  %a
-              %+  turn  files.grove-view-listing.upd
-              |=  m=file-meta
-              %-  pairs
-              :~  ['id' s+(scot %uv id.m)]
-                  ['name' s+name.m]
-                  ['fileMark' s+(crip (trip file-mark.m))]
-                  ['size' (numb size.m)]
-                  ['tags' [%a (turn ~(tap in tags.m) |=(t=@tas s+(crip (trip t))))]]
-                  ['created' s+(scot %da created.m)]
-                  ['modified' s+(scot %da modified.m)]
-                  ['description' s+description.m]
-                  ['starred' b+starred.m]
-              ==
-          ==
-      ==
-    ::
-        %shared-view-removed
-      %-  pairs
-      :~  ['type' s+'sharedViewRemoved']
-          ['host' s+(scot %p host.upd)]
-          ['name' s+name.upd]
-      ==
-    ==
     ::
     ++  canopy-entry-json
       |=  e=canopy-entry
@@ -192,28 +175,14 @@
           ['description' s+description.e]
       ==
     ::
-    ++  canopy-config-json
-      |=  c=canopy-config
-      ^-  ^json
-      %-  pairs
-      :~  ['mode' s+(crip (trip mode.c))]
-          ['name' s+name.c]
-          ['friends' [%a (turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))]]
-          :-  'group-flag'
-          ?~  group-flag.c  ~
-          =/  gf  u.group-flag.c
-          %-  pairs
-          :~  ['host' s+(scot %p -.gf)]
-              ['name' s++.gf]
-          ==
-      ==
-    ::
-    ++  canopy-listing-json
-      |=  l=canopy-listing
+    ++  catalog-listing-json
+      |=  l=catalog-listing
       ^-  ^json
       %-  pairs
       :~  ['host' s+(scot %p host.l)]
+          ['catalogId' s+(crip (trip catalog-id.l))]
           ['name' s+name.l]
+          ['description' s+description.l]
           ['mode' s+(crip (trip mode.l))]
           ['entries' [%a (turn entries.l canopy-entry-json)]]
       ==

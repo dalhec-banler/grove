@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import type { FileMeta } from '../types';
 import { fileUrl } from '../urls';
 import { formatBytes } from '../format';
@@ -20,6 +20,8 @@ export default function Lightbox({ file, files, onNavigate, onClose }: Props) {
   const goNext = useCallback(() => {
     if (idx < files.length - 1) onNavigate(files[idx + 1]);
   }, [idx, files, onNavigate]);
+
+  const touchStartX = useRef(0);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -54,8 +56,14 @@ export default function Lightbox({ file, files, onNavigate, onClose }: Props) {
       </div>
 
       <div
-        className="flex-1 flex items-center justify-center min-h-0 px-12"
+        className="flex-1 flex items-center justify-center min-h-0 px-4 md:px-12"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          const delta = e.changedTouches[0].clientX - touchStartX.current;
+          if (delta > 60) goPrev();
+          else if (delta < -60) goNext();
+        }}
       >
         {idx > 0 && (
           <button

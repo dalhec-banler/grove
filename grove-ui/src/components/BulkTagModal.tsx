@@ -26,7 +26,7 @@ export default function BulkTagModal({ files, allTags, onClose, onApply }: Props
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-surface rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-lg shadow-xl w-[90vw] max-w-[520px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-border">
           <h2 className="text-lg font-medium">Tag {files.length} upload{files.length > 1 ? 's' : ''}</h2>
           <p className="text-xs text-muted mt-1">Tags you add here will apply to all of them.</p>

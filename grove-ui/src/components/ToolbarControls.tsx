@@ -24,9 +24,9 @@ export default function ToolbarControls({
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 max-w-md border border-border rounded px-3 py-1.5 text-sm"
+        className="flex-1 max-w-full md:max-w-md border border-border rounded px-3 py-1.5 text-sm"
       />
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto hidden md:flex items-center gap-3">
         <select
           value={sortKey}
           onChange={(e) => onSortChange(parseSortKey(e.target.value))}

@@ -74,7 +74,7 @@ export function AcceptedCard({ entry, onFetch, onPlant, onDecline }: {
           {formatBytes(entry.size)} · {entry.cached ? 'cached' : 'live ref'}
         </div>
       </div>
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+      <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:group-hover:opacity-100">
         {entry.cached && (
           <a
             href={remoteFileUrl(entry.owner, entry.fileId)}

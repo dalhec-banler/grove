@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FileMeta, View, Selection } from './types';
+import type { FileMeta, View, Selection, CatalogListing } from './types';
 import { poke, pokeSafe, setErrorHandler, notifyError } from './api';
 import { parseViewMode } from './format';
 import { filterAndSortFiles } from './filter';
 import { useGroveData } from './useGroveData';
 import { useUpload } from './useUpload';
 import { useToolbarState } from './useToolbarState';
-import { useInboxActions, useCanopyActions } from './useActions';
+import { useInboxActions, useCatalogActions } from './useActions';
+import { useIsMobile } from './useIsMobile';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
 import FileGrid from './components/FileGrid';
@@ -17,12 +18,19 @@ import FileDetails from './components/FileDetails';
 import BulkTagModal from './components/BulkTagModal';
 import BulkActionBar from './components/BulkActionBar';
 import InboxView from './components/InboxView';
-import CanopyView from './components/CanopyView';
 import ToolbarControls from './components/ToolbarControls';
 import PublishModal from './components/PublishModal';
-import SharedViewsView from './components/SharedViewsView';
 import Lightbox from './components/Lightbox';
 import PdfViewer from './components/PdfViewer';
+import MobileTabBar from './components/MobileTabBar';
+import ConfirmDialog from './components/ConfirmDialog';
+import CatalogsView from './components/CatalogsView';
+import CatalogDetailView from './components/CatalogDetailView';
+import BrowseView from './components/BrowseView';
+import BrowsePeerView from './components/BrowsePeerView';
+import BrowseCatalogView from './components/BrowseCatalogView';
+import DiscoverView from './components/DiscoverView';
+
 import { IMAGE_MARKS } from './format';
 import { fileUrl } from './urls';
 
@@ -32,13 +40,14 @@ export default function App() {
 
   const {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, newSvKeys, setNewSvKeys, availableGroups,
+    catalogs, catalogPeers, catalogSubs, availableGroups,
     connected, loadError, setPendingShareFor, shareDialog, setShareDialog,
   } = useGroveData(isUploadingRef, uploadCollectedRef);
 
   const upload = useUpload(setFiles, isUploadingRef, uploadCollectedRef);
 
-  const [selection, setSelection] = useState<Selection>({ kind: 'all' });
+  const [selection, setSelectionRaw] = useState<Selection>({ kind: 'all' });
+  const setSelection = useCallback((s: Selection) => { setSelectionRaw(s); setDrawerOpen(false); }, []);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -49,15 +58,18 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [lightboxFileId, setLightboxFileId] = useState<string | null>(null);
   const [pdfViewerFileId, setPdfViewerFileId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null);
+  const isMobile = useIsMobile();
 
   const fileToolbar = useToolbarState('newest', () =>
     parseViewMode(localStorage.getItem('grove:viewMode') ?? 'grid')
   );
-  const canopyToolbar = useToolbarState('newest', 'list');
+  const catalogToolbar = useToolbarState('newest', 'list');
   const inboxToolbar = useToolbarState('newest', 'list');
 
   const inboxActions = useInboxActions();
-  const canopyActions = useCanopyActions(setSelection);
+  const catalogActions = useCatalogActions(setSelection);
 
   useEffect(() => {
     setErrorHandler((msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); });
@@ -66,13 +78,6 @@ export default function App() {
 
   // Clear file selection when navigating to a different section.
   useEffect(() => { setSelectedIds(new Set()); setAnchorId(null); }, [selection]);
-
-  // Clear "new" shared view indicators when user visits that section.
-  useEffect(() => {
-    if (selection.kind === 'shared-views' || selection.kind === 'shared-view') {
-      setNewSvKeys(new Set());
-    }
-  }, [selection, setNewSvKeys]);
 
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -148,8 +153,13 @@ export default function App() {
     setSelectedIds(ids);
   }, []);
 
-  const deleteFile = useCallback((id: string) => {
-    if (!confirm('Delete this file?')) return;
+  const mobileConfirm = useCallback((message: string): Promise<boolean> => {
+    return new Promise((resolve) => setConfirmState({ message, resolve }));
+  }, []);
+
+  const deleteFile = useCallback(async (id: string) => {
+    const ok = isMobile ? await mobileConfirm('Delete this file?') : confirm('Delete this file?');
+    if (!ok) return;
     pokeSafe({ delete: { id } });
     setActiveFileId((prev) => prev === id ? null : prev);
     setSelectedIds((prev) => {
@@ -158,7 +168,7 @@ export default function App() {
       next.delete(id);
       return next;
     });
-  }, []);
+  }, [isMobile, mobileConfirm]);
 
   const bulkDownload = useCallback(() => {
     for (const id of selectedIds) {
@@ -173,13 +183,15 @@ export default function App() {
     }
   }, [selectedIds, files]);
 
-  const bulkDelete = useCallback(() => {
+  const bulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Delete ${selectedIds.size} file${selectedIds.size > 1 ? 's' : ''}?`)) return;
+    const msg = `Delete ${selectedIds.size} file${selectedIds.size > 1 ? 's' : ''}?`;
+    const ok = isMobile ? await mobileConfirm(msg) : confirm(msg);
+    if (!ok) return;
     for (const id of selectedIds) pokeSafe({ delete: { id } });
     setSelectedIds(new Set());
     setActiveFileId(null);
-  }, [selectedIds]);
+  }, [selectedIds, isMobile, mobileConfirm]);
 
   const handleDropOnView = useCallback((viewName: string, fileIds: string[]) => {
     const view = views.get(viewName);
@@ -192,21 +204,6 @@ export default function App() {
     }
   }, [views, files]);
 
-  const handleDropOnCanopy = useCallback((fileIds: string[]) => {
-    if (fileIds.length === 1) {
-      const file = files.get(fileIds[0]);
-      if (file) setPublishingFile(file);
-    } else {
-      for (const id of fileIds) {
-        const file = files.get(id);
-        if (!file) continue;
-        pokeSafe({
-          publish: { id, 'display-name': file.name, tags: file.tags, description: file.description },
-        });
-      }
-    }
-  }, [files]);
-
   const bulkTagFiles = upload.bulkTagIds
     ? upload.bulkTagIds.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
     : [];
@@ -215,18 +212,11 @@ export default function App() {
     ? bulkTagForSelection.map((id) => files.get(id)).filter((f): f is FileMeta => !!f)
     : [];
 
-  const canopyPeerList = useMemo(
-    () => Array.from(canopyPeers.keys()).sort((a, b) => a.localeCompare(b)),
-    [canopyPeers]
-  );
+  const isCatalogSection = selection.kind === 'catalogs' || selection.kind === 'catalog'
+    || selection.kind === 'browse' || selection.kind === 'browse-peer'
+    || selection.kind === 'browse-catalog' || selection.kind === 'discover';
 
-  const isCanopySelection =
-    selection.kind === 'canopy-mine' || selection.kind === 'canopy-browse' || selection.kind === 'canopy-peer';
-
-  const isSharedViewSelection =
-    selection.kind === 'shared-views' || selection.kind === 'shared-view';
-
-  const isFileView = !isCanopySelection && !isSharedViewSelection && selection.kind !== 'inbox';
+  const isFileView = !isCatalogSection && selection.kind !== 'inbox';
 
   const toolbarProps = useMemo(() => {
     const fromToolbar = (tb: typeof fileToolbar, placeholder: string, tint: 'accent' | 'canopy') => ({
@@ -235,87 +225,93 @@ export default function App() {
       viewMode: tb.viewMode, onViewModeChange: tb.setViewMode,
       placeholder, tint,
     });
-    if (isCanopySelection) return fromToolbar(canopyToolbar, 'Search entries…', 'canopy');
-    if (selection.kind === 'inbox') return fromToolbar(inboxToolbar, 'Search shared…', 'accent');
-    return fromToolbar(fileToolbar, 'Search files & tags…', 'accent');
+    if (isCatalogSection) return fromToolbar(catalogToolbar, 'Search entries...', 'canopy');
+    if (selection.kind === 'inbox') return fromToolbar(inboxToolbar, 'Search shared...', 'accent');
+    return fromToolbar(fileToolbar, 'Search files & tags...', 'accent');
   }, [
-    isCanopySelection, selection.kind,
-    canopyToolbar, inboxToolbar, fileToolbar,
+    isCatalogSection, selection.kind,
+    catalogToolbar, inboxToolbar, fileToolbar,
   ]);
 
   let activeTitle: string;
   switch (selection.kind) {
     case 'all': activeTitle = 'All files'; break;
     case 'starred': activeTitle = 'Starred'; break;
-    case 'inbox': activeTitle = 'Shared files'; break;
-    case 'shared-views': activeTitle = 'Shared Views'; break;
-    case 'shared-view': activeTitle = selection.name; break;
-    case 'canopy-mine': activeTitle = 'My canopy'; break;
-    case 'canopy-browse': activeTitle = 'Browse canopies'; break;
-    case 'canopy-peer': activeTitle = canopyPeers.get(selection.ship)?.name || selection.ship; break;
+    case 'inbox': activeTitle = 'Inbox'; break;
+    case 'catalogs': activeTitle = 'My Catalogs'; break;
+    case 'catalog': {
+      const cat = catalogs.get(selection.catalogId);
+      activeTitle = cat?.name || selection.catalogId;
+      break;
+    }
+    case 'browse': activeTitle = 'Browse'; break;
+    case 'browse-peer': activeTitle = selection.host; break;
+    case 'browse-catalog': {
+      const key = `${selection.host}/${selection.catalogId}`;
+      const listing = catalogPeers.get(key);
+      activeTitle = listing?.name || selection.catalogId;
+      break;
+    }
+    case 'discover': activeTitle = 'Discover'; break;
     case 'view': activeTitle = selection.name; break;
     case 'tag': activeTitle = `#${selection.name}`; break;
     default: activeTitle = '';
   }
 
+  // Get listings for a specific peer
+  const peerListings = useMemo(() => {
+    if (selection.kind !== 'browse-peer') return [];
+    return Array.from(catalogPeers.values()).filter((l) => l.host === selection.host);
+  }, [selection, catalogPeers]);
+
+  const sidebarProps = {
+    views: Array.from(views.values()),
+    tagCounts,
+    selection,
+    onSelect: setSelection,
+    onNewView: () => { setEditingView(null); setShowViewModal(true); },
+    onEditView: (v: View) => { setEditingView(v); setShowViewModal(true); },
+    onDeleteView: (v: View) => pokeSafe({ rmview: { name: v.name } }),
+    counts: {
+      all: files.size,
+      starred: Array.from(files.values()).filter((f) => f.starred).length,
+      inbox: inbox.size,
+      inboxPending: Array.from(inbox.values()).filter((e) => !e.accepted).length,
+    },
+    connected,
+    shipName: window.ship ?? '',
+    catalogs,
+    catalogPeers,
+    onUnsubscribeCatalog: catalogActions.unsubscribeCatalog,
+    onDropOnView: handleDropOnView,
+  };
+
   return (
     <div className="flex h-full relative" {...upload.dragHandlers}>
-      <Sidebar
-        views={Array.from(views.values())}
-        tagCounts={tagCounts}
-        selection={selection}
-        onSelect={setSelection}
-        onNewView={() => { setEditingView(null); setShowViewModal(true); }}
-        onEditView={(v) => { setEditingView(v); setShowViewModal(true); }}
-        onDeleteView={(v) => pokeSafe({ rmview: { name: v.name } })}
-        counts={{
-          all: files.size,
-          starred: Array.from(files.values()).filter((f) => f.starred).length,
-          inbox: inbox.size,
-          inboxPending: Array.from(inbox.values()).filter((e) => !e.accepted).length,
-          canopy: canopyEntries.size,
-          newSharedViews: newSvKeys.size,
-        }}
-        connected={connected}
-        shipName={window.ship ?? ''}
-        canopyPeers={canopyPeerList}
-        onUnsubscribeCanopy={(ship) => {
-          pokeSafe({ 'unsubscribe-from': { who: ship } });
-          if (selection.kind === 'canopy-peer' && selection.ship === ship) {
-            setSelection({ kind: 'canopy-browse' });
-          }
-        }}
-        onDropOnView={handleDropOnView}
-        onDropOnCanopy={handleDropOnCanopy}
-        svPeers={svPeers}
-        onUnsubscribeSharedView={(host, name) => {
-          pokeSafe({ 'unsubscribe-view': { who: host, name } });
-          if (selection.kind === 'shared-view' && selection.host === host && selection.name === name) {
-            setSelection({ kind: 'shared-views' });
-          }
-        }}
-      />
-      <main className="flex-1 flex flex-col min-w-0">
+      {drawerOpen && (
+        <Sidebar
+          isDrawer
+          onCloseDrawer={() => setDrawerOpen(false)}
+          {...sidebarProps}
+        />
+      )}
+      <Sidebar {...sidebarProps} />
+      <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
         {loadError && (
           <div className="bg-red-600 text-white text-sm px-4 py-2 text-center">{loadError}</div>
         )}
-        <header className="h-14 border-b border-border flex items-center px-6 gap-4 bg-surface">
+
+        <header className="h-14 border-b border-border flex items-center px-3 md:px-6 gap-2 md:gap-4 bg-surface">
+          <button onClick={() => setDrawerOpen(true)} className="text-muted hover:text-ink md:hidden shrink-0 p-1">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
           <h1 className="text-lg font-medium min-w-0 truncate">
             {selection.kind === 'view' ? (
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full" style={{ background: views.get(selection.name)?.color ?? '#888' }} />
                 {selection.name}
-              </span>
-            ) : selection.kind === 'canopy-peer' ? (
-              <span className="flex items-center gap-2">
-                <span>{activeTitle}</span>
-                <span className="text-xs text-faint font-mono font-normal">{selection.ship}</span>
-              </span>
-            ) : selection.kind === 'shared-view' ? (
-              <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full" style={{ background: svPeers.get(`${selection.host}/${selection.name}`)?.color ?? '#888' }} />
-                <span>{selection.name}</span>
-                <span className="text-xs text-faint font-mono font-normal">{selection.host}</span>
               </span>
             ) : activeTitle}
           </h1>
@@ -327,11 +323,11 @@ export default function App() {
               onTag={() => setBulkTagForSelection(Array.from(selectedIds))}
               onClear={() => { setSelectedIds(new Set()); setAnchorId(null); }}
             />
-          ) : selection.kind !== 'canopy-browse' && selection.kind !== 'shared-views' ? (
+          ) : selection.kind !== 'browse' && selection.kind !== 'catalogs' ? (
             <ToolbarControls {...toolbarProps} />
           ) : null}
-          {(selection.kind === 'canopy-browse' || selection.kind === 'shared-views') && <div className="flex-1" />}
-          <div className={selection.kind === 'canopy-browse' ? 'ml-auto' : ''}>
+          {(selection.kind === 'browse' || selection.kind === 'catalogs') && <div className="flex-1" />}
+          <div>
             <UploadZone busy={upload.busy} progress={upload.progress} onFiles={upload.upload} />
           </div>
         </header>
@@ -355,59 +351,62 @@ export default function App() {
                 onPlant={inboxActions.plant}
                 onDropCache={inboxActions.dropCache}
               />
-            ) : selection.kind === 'canopy-mine' ? (
-              <CanopyView
-                kind="mine"
-                entries={Array.from(canopyEntries.values())}
-                config={canopyConfig}
-                search={canopyToolbar.search}
-                sortKey={canopyToolbar.sort}
-                viewMode={canopyToolbar.viewMode}
-                onUnpublish={canopyActions.unpublish}
-                onSetMode={canopyActions.setMode}
-                onSetName={canopyActions.setName}
-                onAddFriend={canopyActions.addFriend}
-                onRemoveFriend={canopyActions.removeFriend}
-                onSetGroup={canopyActions.setGroup}
+            ) : selection.kind === 'catalogs' ? (
+              <CatalogsView
+                catalogs={catalogs}
+                onSelect={setSelection}
+                onCreateCatalog={catalogActions.createCatalog}
+                onDeleteCatalog={catalogActions.deleteCatalog}
+              />
+            ) : selection.kind === 'catalog' ? (
+              <CatalogDetailView
+                catalogId={selection.catalogId}
+                config={catalogs.get(selection.catalogId) ?? { name: '', description: '', mode: 'public', friends: [], groupFlag: null, files: [], created: '', modified: '' }}
+                allFiles={files}
                 groups={availableGroups}
+                viewMode={catalogToolbar.viewMode}
+                search={catalogToolbar.search}
+                onUpdateCatalog={catalogActions.updateCatalog}
+                onSetMode={catalogActions.setCatalogMode}
+                onSetGroup={catalogActions.setCatalogGroup}
+                onAddFriend={catalogActions.addCatalogFriend}
+                onRemoveFriend={catalogActions.removeCatalogFriend}
+                onRemoveFile={catalogActions.removeFromCatalog}
               />
-            ) : selection.kind === 'canopy-browse' ? (
-              <CanopyView
-                kind="browse"
-                subscribed={new Set(canopyPeers.keys())}
-                onSubscribe={canopyActions.subscribe}
+            ) : selection.kind === 'browse' ? (
+              <BrowseView
+                catalogPeers={catalogPeers}
+                onSelect={setSelection}
+                onSubscribe={catalogActions.subscribeCatalog}
               />
-            ) : selection.kind === 'canopy-peer' ? (
-              <CanopyView
-                kind="peer"
-                host={selection.ship}
-                listing={canopyPeers.get(selection.ship) ?? null}
+            ) : selection.kind === 'browse-peer' ? (
+              <BrowsePeerView
+                host={selection.host}
+                listings={peerListings}
+                onSelect={setSelection}
+                onUnsubscribe={catalogActions.unsubscribeCatalog}
+              />
+            ) : selection.kind === 'browse-catalog' ? (
+              <BrowseCatalogView
+                host={selection.host}
+                listing={catalogPeers.get(`${selection.host}/${selection.catalogId}`) ?? { host: selection.host, catalogId: selection.catalogId, name: '', description: '', mode: 'public', entries: [] }}
                 cache={inbox}
-                search={canopyToolbar.search}
-                sortKey={canopyToolbar.sort}
-                viewMode={canopyToolbar.viewMode}
-                onFetch={canopyActions.fetchEntry}
-                onPlant={canopyActions.plantEntry}
-                onDropCache={canopyActions.dropCache}
-                onUnsubscribe={canopyActions.unsubscribe}
+                viewMode={catalogToolbar.viewMode}
+                search={catalogToolbar.search}
+                onFetch={catalogActions.fetchEntry}
+                onPlant={catalogActions.plantEntry}
+                onDropCache={catalogActions.dropCache}
+                onUnsubscribe={catalogActions.unsubscribeCatalog}
               />
-            ) : selection.kind === 'shared-views' ? (
-              <SharedViewsView
-                kind="browse"
-                svPeers={svPeers}
-                onSubscribe={(host, name) => pokeSafe({ 'subscribe-view': { who: host, name } })}
-                onUnsubscribe={(host, name) => pokeSafe({ 'unsubscribe-view': { who: host, name } })}
-                onSelectView={(host, name) => setSelection({ kind: 'shared-view', host, name })}
-              />
-            ) : selection.kind === 'shared-view' ? (
-              <SharedViewsView
-                kind="detail"
-                listing={svPeers.get(`${selection.host}/${selection.name}`) ?? { host: selection.host, name: selection.name, tags: [], color: '#888', files: [] }}
-                viewMode={fileToolbar.viewMode}
-                onUnsubscribe={() => {
-                  pokeSafe({ 'unsubscribe-view': { who: selection.host, name: selection.name } });
-                  setSelection({ kind: 'shared-views' });
-                }}
+            ) : selection.kind === 'discover' ? (
+              <DiscoverView
+                catalogPeers={catalogPeers}
+                cache={inbox}
+                viewMode={catalogToolbar.viewMode}
+                search={catalogToolbar.search}
+                onFetch={catalogActions.fetchEntry}
+                onPlant={catalogActions.plantEntry}
+                onDropCache={catalogActions.dropCache}
               />
             ) : fileToolbar.viewMode === 'list' ? (
               <FileList
@@ -439,11 +438,11 @@ export default function App() {
               />
             )}
           </div>
-          {activeFile && !isCanopySelection && !isSharedViewSelection && (
+          {activeFile && isFileView && (
             <FileDetails
               file={activeFile}
               share={shareForActive}
-              published={canopyEntries.has(activeFile.id)}
+              catalogs={catalogs}
               onClose={() => setActiveFileId(null)}
               onRename={(name) => pokeSafe({ rename: { id: activeFile.id, name } })}
               onAddTags={(tags) => pokeSafe({ 'add-tags': { id: activeFile.id, tags } })}
@@ -455,7 +454,9 @@ export default function App() {
                 pokeSafe({ 'set-allowed': { id: activeFile.id, ships, notify, 'base-url': window.location.origin } })
               }
               onPublish={() => setPublishingFile(activeFile)}
-              onUnpublish={() => pokeSafe({ unpublish: { id: activeFile.id } })}
+              onRemoveFromCatalog={(catalogId) =>
+                pokeSafe({ 'remove-from-catalog': { id: catalogId, 'file-id': activeFile.id } })
+              }
             />
           )}
         </div>
@@ -473,15 +474,9 @@ export default function App() {
         <ViewModal
           initial={editingView}
           allTags={allTags}
-          groups={availableGroups}
           onClose={() => setShowViewModal(false)}
-          onSave={(name, tags, color, shared) => {
+          onSave={(name, tags, color) => {
             pokeSafe({ mkview: { name, tags, color } });
-            if (shared) {
-              pokeSafe({ 'share-view': { name, allowed: shared.allowed, 'group-flag': shared.groupFlag } });
-            } else if (editingView?.shared) {
-              pokeSafe({ 'unshare-view': { name } });
-            }
             setShowViewModal(false);
           }}
         />
@@ -492,16 +487,10 @@ export default function App() {
       {publishingFile && (
         <PublishModal
           file={publishingFile}
+          catalogs={catalogs}
           onClose={() => setPublishingFile(null)}
-          onPublish={({ displayName, tags, description }) => {
-            pokeSafe({
-              publish: {
-                id: publishingFile.id,
-                'display-name': displayName,
-                tags,
-                description,
-              },
-            });
+          onPublish={(catalogId, { displayName, tags, description }) => {
+            catalogActions.addToCatalog(catalogId, publishingFile.id, displayName, tags, description);
             setPublishingFile(null);
           }}
         />
@@ -547,8 +536,21 @@ export default function App() {
           onClose={() => setPdfViewerFileId(null)}
         />
       )}
+      <MobileTabBar
+        selection={selection}
+        onSelect={setSelection}
+        onOpenDrawer={() => setDrawerOpen(true)}
+        inboxBadge={Array.from(inbox.values()).filter((e) => !e.accepted).length}
+      />
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          onConfirm={() => { confirmState.resolve(true); setConfirmState(null); }}
+          onCancel={() => { confirmState.resolve(false); setConfirmState(null); }}
+        />
+      )}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50">
+        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-4 py-2 rounded shadow-lg z-50">
           {toast}
         </div>
       )}

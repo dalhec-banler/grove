@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FileMeta, Share } from '../types';
+import type { FileMeta, Share, CatalogConfig } from '../types';
 import { formatBytes, formatDate, normalizeShip, addTag } from '../format';
 import { fileUrl } from '../urls';
 import Thumb from './Thumb';
@@ -8,7 +8,7 @@ import ShipChip from './ShipChip';
 interface Props {
   file: FileMeta;
   share: Share | null;
-  published: boolean;
+  catalogs: Map<string, CatalogConfig>;
   onClose: () => void;
   onRename: (name: string) => void;
   onAddTags: (tags: string[]) => void;
@@ -18,10 +18,10 @@ interface Props {
   onShowShare: (sh: Share) => void;
   onSetAllowed: (ships: string[], notify: boolean) => void;
   onPublish: () => void;
-  onUnpublish: () => void;
+  onRemoveFromCatalog: (catalogId: string) => void;
 }
 
-export default function FileDetails({ file, share, published, onClose, onRename, onAddTags, onRemoveTags, onShare, onUnshare, onShowShare, onSetAllowed, onPublish, onUnpublish }: Props) {
+export default function FileDetails({ file, share, catalogs, onClose, onRename, onAddTags, onRemoveTags, onShare, onUnshare, onShowShare, onSetAllowed, onPublish, onRemoveFromCatalog }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(file.name);
   const [tagDraft, setTagDraft] = useState('');
@@ -54,10 +54,13 @@ export default function FileDetails({ file, share, published, onClose, onRename,
   }
 
   return (
-    <aside className="w-80 shrink-0 border-l border-border bg-surface overflow-y-auto">
+    <aside className="fixed inset-0 z-30 bg-surface overflow-y-auto md:static md:w-80 md:shrink-0 md:border-l md:border-border md:z-auto">
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <span className="text-xs text-muted uppercase tracking-wider">Details</span>
-        <button onClick={onClose} className="text-muted hover:text-ink text-sm">×</button>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="text-muted hover:text-ink text-lg md:hidden">&larr;</button>
+          <span className="text-xs text-muted uppercase tracking-wider">Details</span>
+        </div>
+        <button onClick={onClose} className="text-muted hover:text-ink text-sm hidden md:block">×</button>
       </div>
 
       <div className="p-4 border-b border-border flex items-center gap-3">
@@ -143,24 +146,29 @@ export default function FileDetails({ file, share, published, onClose, onRename,
       </div>
 
       <div className="p-4 border-b border-border">
-        <div className="text-xs text-muted uppercase tracking-wider mb-2" title="Your public file feed that others can browse and subscribe to">Canopy</div>
-        {published ? (
-          <div className="space-y-2">
-            <div className="text-xs text-ink flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Published to your canopy
-            </div>
-            <button
-              onClick={() => { if (confirm('Unpublish from canopy?')) onUnpublish(); }}
-              className="text-xs text-muted hover:text-red-600"
-            >Unpublish</button>
+        <div className="text-xs text-muted uppercase tracking-wider mb-2" title="Catalogs this file belongs to">Catalogs</div>
+        {file.inCatalogs.length > 0 ? (
+          <div className="space-y-1 mb-2">
+            {file.inCatalogs.map((cid) => {
+              const cat = catalogs.get(cid);
+              return (
+                <div key={cid} className="flex items-center justify-between text-xs">
+                  <span className="text-ink">{cat?.name || cid}</span>
+                  <button
+                    onClick={() => onRemoveFromCatalog(cid)}
+                    className="text-faint hover:text-red-600"
+                  >Remove</button>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <button
-            onClick={onPublish}
-            className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-accent"
-          >Publish to canopy…</button>
+          <div className="text-xs text-faint mb-2">Not in any catalogs</div>
         )}
+        <button
+          onClick={onPublish}
+          className="text-xs px-2 py-1 rounded border border-border text-muted hover:text-canopy"
+        >Add to catalog...</button>
       </div>
 
       <div className="p-4 border-b border-border">

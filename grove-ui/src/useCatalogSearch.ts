@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { CanopySearchHit } from './types';
-import { scryCanopySearch } from './api';
+import type { CatalogSearchHit } from './types';
+import { scryCatalogSearch } from './api';
 
-export function useCanopySearch(term: string) {
-  const [hits, setHits] = useState<CanopySearchHit[]>([]);
+export function useCatalogSearch(term: string) {
+  const [hits, setHits] = useState<CatalogSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +14,7 @@ export function useCanopySearch(term: string) {
     setSearching(true);
     setError(null);
     const h = setTimeout(() => {
-      scryCanopySearch(q)
+      scryCatalogSearch(q)
         .then((r) => { if (!cancelled) setHits(r); })
         .catch((e) => { if (!cancelled) { console.error('search', e); setError('Search failed — try again.'); } })
         .finally(() => { if (!cancelled) setSearching(false); });

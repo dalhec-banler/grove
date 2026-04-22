@@ -12,13 +12,13 @@ export interface FileMeta {
   description: string;
   starred: boolean;
   allowed: string[];
+  inCatalogs: string[];
 }
 
 export interface View {
   name: string;
   tags: string[];
   color: string;
-  shared?: SharedViewConfig;
 }
 
 export interface Share {
@@ -43,7 +43,7 @@ export interface Trust {
   blocked: string[];
 }
 
-export type CanopyMode = 'open' | 'friends' | 'group';
+export type CatalogMode = 'public' | 'pals' | 'group';
 
 export interface CanopyEntry {
   id: FileId;
@@ -67,36 +67,41 @@ export interface GroupInfo {
   members: number;
 }
 
-export interface SharedViewConfig {
-  allowed: string[];
-  groupFlag: GroupFlag | null;
-}
-
-export interface GroveViewListing {
-  host: string;
+export interface CatalogConfig {
   name: string;
-  tags: string[];
-  color: string;
-  files: FileMeta[];
-}
-
-export interface CanopyConfig {
-  mode: CanopyMode;
-  name: string;
+  description: string;
+  mode: CatalogMode;
   friends: string[];
   groupFlag: GroupFlag | null;
+  files: string[];
+  created: string;
+  modified: string;
 }
 
-export interface CanopyListing {
+export interface Catalog {
+  catalogId: string;
+  config: CatalogConfig;
+}
+
+export interface CatalogListing {
   host: string;
+  catalogId: string;
   name: string;
-  mode: CanopyMode;
+  description: string;
+  mode: CatalogMode;
   entries: CanopyEntry[];
 }
 
-export interface CanopySearchHit {
+export interface CatalogSearchHit {
   host: string;
+  catalogId: string;
+  catalogName: string;
   entry: CanopyEntry;
+}
+
+export interface CatalogSub {
+  host: string;
+  catalogId: string;
 }
 
 export type Update =
@@ -114,15 +119,13 @@ export type Update =
   | { type: 'trustedUpdated'; trusted: string[]; blocked: string[] }
   | { type: 'cacheUpdated'; owner: string; meta: FileMeta }
   | { type: 'cacheRemoved'; owner: string; fileId: FileId }
-  | { type: 'canopyEntryAdded'; entry: CanopyEntry }
-  | { type: 'canopyEntryRemoved'; fileId: FileId }
-  | { type: 'canopyConfigUpdated'; config: CanopyConfig }
-  | { type: 'canopyPeerUpdated'; listing: CanopyListing }
-  | { type: 'canopyPeerRemoved'; host: string }
-  | { type: 'viewShared'; name: string; allowed: string[]; groupFlag: GroupFlag | null }
-  | { type: 'viewUnshared'; name: string }
-  | { type: 'sharedViewUpdated'; listing: GroveViewListing }
-  | { type: 'sharedViewRemoved'; host: string; name: string };
+  | { type: 'catalogCreated'; catalogId: string; config: CatalogConfig }
+  | { type: 'catalogDeleted'; catalogId: string }
+  | { type: 'catalogUpdated'; catalogId: string; config: CatalogConfig }
+  | { type: 'catalogFileAdded'; catalogId: string; fileId: FileId }
+  | { type: 'catalogFileRemoved'; catalogId: string; fileId: FileId }
+  | { type: 'catalogPeerUpdated'; listing: CatalogListing }
+  | { type: 'catalogPeerRemoved'; host: string; catalogId: string };
 
 export type SortKey = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'largest' | 'smallest' | 'type';
 
@@ -134,19 +137,19 @@ export type Selection =
   | { kind: 'view'; name: string }
   | { kind: 'tag'; name: string }
   | { kind: 'inbox' }
-  | { kind: 'shared-views' }
-  | { kind: 'shared-view'; host: string; name: string }
-  | { kind: 'canopy-mine' }
-  | { kind: 'canopy-browse' }
-  | { kind: 'canopy-peer'; ship: string };
+  | { kind: 'catalogs' }
+  | { kind: 'catalog'; catalogId: string }
+  | { kind: 'browse' }
+  | { kind: 'browse-peer'; host: string }
+  | { kind: 'browse-catalog'; host: string; catalogId: string }
+  | { kind: 'discover' };
 
 // Wire-format interfaces matching Hoon JSON serialization.
-// Scry responses use kebab-case; subscription updates use camelCase.
-// fromJson parsers accept both via fallback reads.
 export interface RawFileMeta {
   id: string;
   name: string;
-  'file-mark': string;
+  'file-mark'?: string;
+  fileMark?: string;
   size: number;
   tags?: string[];
   created: string;
@@ -154,6 +157,7 @@ export interface RawFileMeta {
   description?: string;
   starred?: boolean;
   allowed?: string[];
+  inCatalogs?: string[];
 }
 
 export interface RawInboxEntry {
@@ -182,16 +186,23 @@ export interface RawCanopyEntry {
   description?: string;
 }
 
-export interface RawCanopyConfig {
-  mode?: unknown;
+export interface RawCatalogConfig {
   name?: string;
+  description?: string;
+  mode?: unknown;
   friends?: string[];
   'group-flag'?: { host: string; name: string } | null;
+  files?: string[];
+  created?: string;
+  modified?: string;
 }
 
-export interface RawCanopyListing {
+export interface RawCatalogListing {
   host: string;
+  catalogId?: string;
+  'catalog-id'?: string;
   name?: string;
+  description?: string;
   mode?: unknown;
   entries?: RawCanopyEntry[];
 }
@@ -200,7 +211,6 @@ export interface RawView {
   name: string;
   tags?: string[];
   color: string;
-  shared?: unknown;
 }
 
 export interface RawShare {
@@ -209,8 +219,12 @@ export interface RawShare {
   name: string;
 }
 
-export interface RawCanopySearchHit {
+export interface RawCatalogSearchHit {
   host: string;
+  catalogId?: string;
+  'catalog-id'?: string;
+  catalogName?: string;
+  'catalog-name'?: string;
   entry: RawCanopyEntry;
 }
 
@@ -219,19 +233,6 @@ export interface RawGroupInfo {
   name: string;
   title?: string;
   members?: number;
-}
-
-export interface RawSharedViewConfig {
-  allowed?: string[];
-  'group-flag'?: { host: string; name: string } | null;
-}
-
-export interface RawGroveViewListing {
-  host: string;
-  name: string;
-  tags?: string[];
-  color?: string;
-  files?: RawFileMeta[];
 }
 
 export type GroveAction =
@@ -256,16 +257,14 @@ export type GroveAction =
   | { fetch: { owner: string; id: FileId } }
   | { plant: { owner: string; id: FileId } }
   | { 'drop-cache': { owner: string; id: FileId } }
-  | { publish: { id: FileId; 'display-name': string; tags: string[]; description: string } }
-  | { unpublish: { id: FileId } }
-  | { 'set-canopy-mode': { mode: CanopyMode } }
-  | { 'set-canopy-name': { name: string } }
-  | { 'add-friend': { who: string } }
-  | { 'remove-friend': { who: string } }
-  | { 'set-canopy-group': { flag: GroupFlag | null } }
-  | { 'subscribe-to': { who: string } }
-  | { 'unsubscribe-from': { who: string } }
-  | { 'share-view': { name: string; allowed: string[]; 'group-flag': GroupFlag | null } }
-  | { 'unshare-view': { name: string } }
-  | { 'subscribe-view': { who: string; name: string } }
-  | { 'unsubscribe-view': { who: string; name: string } };
+  | { 'create-catalog': { id: string; name: string; description: string; mode: CatalogMode } }
+  | { 'delete-catalog': { id: string } }
+  | { 'update-catalog': { id: string; name: string; description: string } }
+  | { 'set-catalog-mode': { id: string; mode: CatalogMode } }
+  | { 'set-catalog-group': { id: string; flag: GroupFlag | null } }
+  | { 'add-catalog-friend': { id: string; who: string } }
+  | { 'remove-catalog-friend': { id: string; who: string } }
+  | { 'add-to-catalog': { id: string; 'file-id': string; 'display-name': string; tags: string[]; description: string } }
+  | { 'remove-from-catalog': { id: string; 'file-id': string } }
+  | { 'subscribe-catalog': { who: string; 'catalog-id': string } }
+  | { 'unsubscribe-catalog': { who: string; 'catalog-id': string } };

@@ -5,8 +5,8 @@ import FileGrid from './FileGrid';
 import type { FileMeta } from '../types';
 
 const files: FileMeta[] = [
-  { id: 'f1', name: 'photo.png', fileMark: 'png', size: 2048, tags: ['vacation'], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: false, allowed: [] },
-  { id: 'f2', name: 'doc.pdf', fileMark: 'pdf', size: 4096, tags: [], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: true, allowed: [] },
+  { id: 'f1', name: 'photo.png', fileMark: 'png', size: 2048, tags: ['vacation'], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: false, allowed: [], inCatalogs: [] },
+  { id: 'f2', name: 'doc.pdf', fileMark: 'pdf', size: 4096, tags: [], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: true, allowed: [], inCatalogs: [] },
 ];
 
 function renderGrid(overrides = {}) {

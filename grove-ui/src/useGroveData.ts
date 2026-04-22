@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   FileMeta, View, Share, Update, InboxEntry,
-  CanopyEntry, CanopyConfig, CanopyListing, GroupInfo, GroveViewListing,
+  Catalog, CatalogConfig, CatalogListing, CatalogSub, GroupInfo,
 } from './types';
 import {
   scryFiles, scryViews, scryShares, scryInbox, scryTrusted,
-  scryCanopyEntries, scryCanopyConfig, scryCanopyPeers, scryGroups,
-  scrySharedViewPeers, subscribeUpdates,
+  scryCatalogs, scryCatalogPeers, scryCatalogSubs, scryGroups,
+  subscribeUpdates,
 } from './api';
 
 function mapSet<K, V>(map: Map<K, V>, key: K, value: V): Map<K, V> {
@@ -29,14 +29,10 @@ export function useGroveData(
   const [inbox, setInbox] = useState<Map<string, InboxEntry>>(new Map());
   const [trusted, setTrusted] = useState<Set<string>>(new Set());
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
-  const [canopyEntries, setCanopyEntries] = useState<Map<string, CanopyEntry>>(new Map());
-  const [canopyConfig, setCanopyConfig] = useState<CanopyConfig>({ mode: 'open', name: '', friends: [], groupFlag: null });
+  const [catalogs, setCatalogs] = useState<Map<string, CatalogConfig>>(new Map());
+  const [catalogPeers, setCatalogPeers] = useState<Map<string, CatalogListing>>(new Map());
+  const [catalogSubs, setCatalogSubs] = useState<CatalogSub[]>([]);
   const [availableGroups, setAvailableGroups] = useState<GroupInfo[]>([]);
-  const [canopyPeers, setCanopyPeers] = useState<Map<string, CanopyListing>>(new Map());
-  const [svPeers, setSvPeers] = useState<Map<string, GroveViewListing>>(new Map());
-  const [newSvKeys, setNewSvKeys] = useState<Set<string>>(new Set());
-  const svPeersRef = useRef(svPeers);
-  svPeersRef.current = svPeers;
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingShareFor, setPendingShareFor] = useState<string | null>(null);
@@ -45,10 +41,9 @@ export function useGroveData(
   filesRef.current = files;
 
   const refreshAll = useCallback(async () => {
-    const [fileList, viewList, shareList, inboxList, trustData, entryList, canopyConf, peerList, groupList, svPeerList] = await Promise.all([
+    const [fileList, viewList, shareList, inboxList, trustData, catalogList, peerList, subList, groupList] = await Promise.all([
       scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
-      scryCanopyEntries(), scryCanopyConfig(), scryCanopyPeers(), scryGroups(),
-      scrySharedViewPeers(),
+      scryCatalogs(), scryCatalogPeers(), scryCatalogSubs(), scryGroups(),
     ]);
     setFiles(new Map(fileList.map((m) => [m.id, m])));
     setViews(new Map(viewList.map((w) => [w.name, w])));
@@ -56,10 +51,9 @@ export function useGroveData(
     setInbox(new Map(inboxList.map((e) => [`${e.owner}/${e.fileId}`, e])));
     setTrusted(new Set(trustData.trusted));
     setBlocked(new Set(trustData.blocked));
-    setCanopyEntries(new Map(entryList.map((e) => [e.id, e])));
-    setCanopyConfig(canopyConf);
-    setCanopyPeers(new Map(peerList.map((l) => [l.host, l])));
-    setSvPeers(new Map(svPeerList.map((l) => [`${l.host}/${l.name}`, l])));
+    setCatalogs(new Map(catalogList.map((c) => [c.catalogId, c.config])));
+    setCatalogPeers(new Map(peerList.map((l) => [`${l.host}/${l.catalogId}`, l])));
+    setCatalogSubs(subList);
     setAvailableGroups(groupList);
     setConnected(true);
     setLoadError(null);
@@ -76,6 +70,7 @@ export function useGroveData(
             tags: u.tags, created: u.created, modified: u.modified,
             description: u.description, starred: u.starred,
             allowed: existing?.allowed ?? [],
+            inCatalogs: existing?.inCatalogs ?? [],
           };
           return mapSet(prev, meta.id, meta);
         });
@@ -100,10 +95,7 @@ export function useGroveData(
         });
         break;
       case 'viewAdded':
-        setViews((prev) => {
-          const existing = prev.get(u.name);
-          return mapSet(prev, u.name, { name: u.name, tags: u.tags, color: u.color, shared: existing?.shared });
-        });
+        setViews((prev) => mapSet(prev, u.name, { name: u.name, tags: u.tags, color: u.color }));
         break;
       case 'viewRemoved':
         setViews((prev) => mapDel(prev, u.name));
@@ -153,53 +145,48 @@ export function useGroveData(
           return mapSet(prev, k, { ...ent, cached: false });
         });
         break;
-      case 'canopyEntryAdded':
-        setCanopyEntries((prev) => mapSet(prev, u.entry.id, u.entry));
+      case 'catalogCreated':
+        setCatalogs((prev) => mapSet(prev, u.catalogId, u.config));
         break;
-      case 'canopyEntryRemoved':
-        setCanopyEntries((prev) => mapDel(prev, u.fileId));
+      case 'catalogDeleted':
+        setCatalogs((prev) => mapDel(prev, u.catalogId));
         break;
-      case 'canopyConfigUpdated':
-        setCanopyConfig(u.config);
+      case 'catalogUpdated':
+        setCatalogs((prev) => mapSet(prev, u.catalogId, u.config));
         break;
-      case 'canopyPeerUpdated':
-        setCanopyPeers((prev) => mapSet(prev, u.listing.host, u.listing));
-        break;
-      case 'canopyPeerRemoved':
-        setCanopyPeers((prev) => mapDel(prev, u.host));
-        break;
-      case 'viewShared':
-        setViews((prev) => {
-          const view = prev.get(u.name);
-          if (!view) return prev;
-          return mapSet(prev, u.name, { ...view, shared: { allowed: u.allowed, groupFlag: u.groupFlag } });
+      case 'catalogFileAdded':
+        setCatalogs((prev) => {
+          const cat = prev.get(u.catalogId);
+          if (!cat) return prev;
+          return mapSet(prev, u.catalogId, { ...cat, files: [...cat.files, u.fileId] });
+        });
+        setFiles((prev) => {
+          const fm = prev.get(u.fileId);
+          if (!fm) return prev;
+          if (fm.inCatalogs.includes(u.catalogId)) return prev;
+          return mapSet(prev, u.fileId, { ...fm, inCatalogs: [...fm.inCatalogs, u.catalogId] });
         });
         break;
-      case 'viewUnshared':
-        setViews((prev) => {
-          const view = prev.get(u.name);
-          if (!view) return prev;
-          const { shared: _, ...rest } = view;
-          return mapSet(prev, u.name, rest as View);
+      case 'catalogFileRemoved':
+        setCatalogs((prev) => {
+          const cat = prev.get(u.catalogId);
+          if (!cat) return prev;
+          return mapSet(prev, u.catalogId, { ...cat, files: cat.files.filter((f) => f !== u.fileId) });
+        });
+        setFiles((prev) => {
+          const fm = prev.get(u.fileId);
+          if (!fm) return prev;
+          return mapSet(prev, u.fileId, { ...fm, inCatalogs: fm.inCatalogs.filter((c) => c !== u.catalogId) });
         });
         break;
-      case 'sharedViewUpdated': {
-        const key = `${u.listing.host}/${u.listing.name}`;
-        if (!svPeersRef.current.has(key)) {
-          setNewSvKeys((prev) => new Set(prev).add(key));
-        }
-        setSvPeers((prev) => mapSet(prev, key, u.listing));
+      case 'catalogPeerUpdated': {
+        const key = `${u.listing.host}/${u.listing.catalogId}`;
+        setCatalogPeers((prev) => mapSet(prev, key, u.listing));
         break;
       }
-      case 'sharedViewRemoved': {
-        const rKey = `${u.host}/${u.name}`;
-        setSvPeers((prev) => mapDel(prev, rKey));
-        setNewSvKeys((prev) => {
-          if (!prev.has(rKey)) return prev;
-          const next = new Set(prev);
-          next.delete(rKey);
-          return next;
-        });
+      case 'catalogPeerRemoved': {
+        const key = `${u.host}/${u.catalogId}`;
+        setCatalogPeers((prev) => mapDel(prev, key));
         break;
       }
     }
@@ -219,7 +206,7 @@ export function useGroveData(
 
   return {
     files, setFiles, views, shares, inbox, trusted, blocked,
-    canopyEntries, canopyConfig, setCanopyConfig, canopyPeers, svPeers, newSvKeys, setNewSvKeys, availableGroups,
+    catalogs, catalogPeers, catalogSubs, availableGroups,
     connected, loadError, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
   };
 }

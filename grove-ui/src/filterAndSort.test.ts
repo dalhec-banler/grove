@@ -15,6 +15,7 @@ function mkFile(overrides: Partial<FileMeta> & { id: string }): FileMeta {
     description: '',
     starred: false,
     allowed: [],
+    inCatalogs: [],
     ...overrides,
   };
 }

@@ -22,6 +22,18 @@
       ^-  octs
       ?>  ?=([%s *] jon)
       (fall (de:base64:mimes:html p.jon) *octs)
+    ++  parse-catalog-mode
+      %+  cu
+        |=  t=@t
+        ^-  catalog-mode
+        ?+  t  !!
+          %public  %public
+          %pals    %pals
+          %group   %group
+        ==
+      so
+    ++  parse-catalog-id
+      (cu |=(t=@t `@tas`(crip (trip t))) so)
     ++  parse-action
       %-  of
       :~  upload+(ot ~[name+so file-mark+parse-tag data+parse-octs tags+parse-tags])
@@ -34,7 +46,7 @@
           rmview+(ot ~[name+so])
           share+(ot ~[id+parse-id])
           unshare+(ot ~[token+parse-id])
-          set-allowed+(ot ~[id+parse-id ships+parse-ships notify+bo])
+          set-allowed+(ot ~[id+parse-id ships+parse-ships notify+bo base-url+so])
           offer+(ot ~[entry+parse-entry])
           accept-offer+(ot ~[owner+parse-ship id+parse-id])
           decline-offer+(ot ~[owner+parse-ship id+parse-id])
@@ -45,19 +57,18 @@
           fetch+(ot ~[owner+parse-ship id+parse-id])
           plant+(ot ~[owner+parse-ship id+parse-id])
           drop-cache+(ot ~[owner+parse-ship id+parse-id])
-          publish+(ot ~[id+parse-id display-name+so tags+parse-tags description+so])
-          unpublish+(ot ~[id+parse-id])
-          set-canopy-mode+(ot ~[mode+parse-canopy-mode])
-          add-friend+(ot ~[who+parse-ship])
-          remove-friend+(ot ~[who+parse-ship])
-          set-canopy-name+(ot ~[name+so])
-          set-canopy-group+(ot ~[flag+parse-group-flag])
-          subscribe-to+(ot ~[who+parse-ship])
-          unsubscribe-from+(ot ~[who+parse-ship])
-          share-view+(ot ~[name+so allowed+parse-ships group-flag+parse-group-flag])
-          unshare-view+(ot ~[name+so])
-          subscribe-view+(ot ~[who+parse-ship name+so])
-          unsubscribe-view+(ot ~[who+parse-ship name+so])
+          ::  catalog actions
+          create-catalog+(ot ~[id+parse-catalog-id name+so description+so mode+parse-catalog-mode])
+          delete-catalog+(ot ~[id+parse-catalog-id])
+          update-catalog+(ot ~[id+parse-catalog-id name+so description+so])
+          set-catalog-mode+(ot ~[id+parse-catalog-id mode+parse-catalog-mode])
+          set-catalog-group+(ot ~[id+parse-catalog-id flag+parse-group-flag])
+          add-catalog-friend+(ot ~[id+parse-catalog-id who+parse-ship])
+          remove-catalog-friend+(ot ~[id+parse-catalog-id who+parse-ship])
+          add-to-catalog+(ot ~[id+parse-catalog-id file-id+parse-id display-name+so tags+parse-tags description+so])
+          remove-from-catalog+(ot ~[id+parse-catalog-id file-id+parse-id])
+          subscribe-catalog+(ot ~[who+parse-ship catalog-id+parse-catalog-id])
+          unsubscribe-catalog+(ot ~[who+parse-ship catalog-id+parse-catalog-id])
       ==
     ++  parse-group-flag
       |=  jon=json
@@ -66,16 +77,6 @@
       %-  some
       %.  jon
       (ot ~[host+parse-ship name+parse-tag])
-    ++  parse-canopy-mode
-      %+  cu
-        |=  t=@t
-        ^-  canopy-mode
-        ?+  t  !!
-          %open     %open
-          %friends  %friends
-          %group    %group
-        ==
-      so
     --
   --
 ++  grow

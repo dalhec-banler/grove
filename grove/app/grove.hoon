@@ -54,6 +54,31 @@
       blocked=(set @p)
       cache=(map [@p file-id] [file-meta octs])
   ==
+::  old canopy types for migration
++$  canopy-mode-old  ?(%open %friends %group)
++$  canopy-config-old
+  $:  mode=canopy-mode-old
+      friends=(set @p)
+      name=@t
+      group-flag=(unit [ship term])
+  ==
++$  canopy-listing-old
+  $:  host=@p
+      name=@t
+      mode=canopy-mode-old
+      entries=(list canopy-entry)
+  ==
++$  shared-view-config-old
+  $:  allowed=(set @p)
+      group-flag=(unit [ship term])
+  ==
++$  grove-view-listing-old
+  $:  host=@p
+      name=@t
+      tags=(list tag)
+      color=@t
+      files=(list file-meta)
+  ==
 +$  state-5
   $:  %5
       f=(map file-id file-meta)
@@ -67,7 +92,7 @@
       cache=(map [@p file-id] [file-meta octs])
       canopy=(map file-id canopy-entry)
       cfg=[mode=?(%open %friends) friends=(set @p) name=@t]
-      peers=(map @p canopy-listing)
+      peers=(map @p canopy-listing-old)
       subs=(set @p)
   ==
 +$  state-6
@@ -82,8 +107,8 @@
       blocked=(set @p)
       cache=(map [@p file-id] [file-meta octs])
       canopy=(map file-id canopy-entry)
-      cfg=canopy-config
-      peers=(map @p canopy-listing)
+      cfg=canopy-config-old
+      peers=(map @p canopy-listing-old)
       subs=(set @p)
   ==
 +$  state-7
@@ -98,17 +123,34 @@
       blocked=(set @p)
       cache=(map [@p file-id] [file-meta octs])
       canopy=(map file-id canopy-entry)
-      cfg=canopy-config
-      peers=(map @p canopy-listing)
+      cfg=canopy-config-old
+      peers=(map @p canopy-listing-old)
       subs=(set @p)
-      sv=(map @t shared-view-config)
+      sv=(map @t shared-view-config-old)
       sv-subs=(map [@p @t] ?)
-      sv-peers=(map [@p @t] grove-view-listing)
+      sv-peers=(map [@p @t] grove-view-listing-old)
   ==
-+$  versioned-state  $%(state-7 state-6 state-5 state-4 state-3 state-2 state-1 state-0)
++$  state-8
+  $:  %8
+      f=(map file-id file-meta)
+      b=(map file-id octs)
+      v=(map @t [(set tag) @t])
+      s=(map share-token file-id)
+      al=(map file-id (set @p))
+      inbox=(map [@p file-id] inbox-entry)
+      trusted=(set @p)
+      blocked=(set @p)
+      cache=(map [@p file-id] [file-meta octs])
+      ::  catalogs
+      catalogs=(map catalog-id catalog-config)
+      pub=(map file-id publish-meta)
+      cat-subs=(map [@p catalog-id] ?)
+      cat-peers=(map [@p catalog-id] catalog-listing)
+  ==
++$  versioned-state  $%(state-8 state-7 state-6 state-5 state-4 state-3 state-2 state-1 state-0)
 --
 %-  agent:dbug
-=|  state-7
+=|  state-8
 =*  state  -
 ^-  agent:gall
 |_  =bowl:gall
@@ -127,13 +169,14 @@
   =/  old  !<(versioned-state old-vase)
   |^
   ?-  -.old
-      %7
+      %8
     :_  this(state old)
     :~  [%pass /bind-share %arvo %e %connect [~ /grove-share] %grove]
         [%pass /bind-file %arvo %e %connect [~ /grove-file] %grove]
         [%pass /bind-remote %arvo %e %connect [~ /grove-remote-file] %grove]
     ==
     ::
+    %7  $(old (seven-to-eight old))
     %6  $(old (six-to-seven old))
     %5  $(old (five-to-six old))
     %4  $(old (four-to-five old))
@@ -143,15 +186,55 @@
     %0  $(old (zero-to-one old))
   ==
   ::
-  ++  two-to-three
-    |=  s=state-2
-    ^-  state-3
-    [%3 f=f.s b=b.s v=v.s s=s.s al=~]
-  ::
-  ++  three-to-four
-    |=  s=state-3
-    ^-  state-4
-    [%4 f=f.s b=b.s v=v.s s=s.s al=al.s inbox=~ trusted=~ blocked=~ cache=~]
+  ++  seven-to-eight
+    |=  s=state-7
+    ^-  state-8
+    ::  migrate canopy entries to a default catalog
+    =/  default-cat=catalog-config
+      :*  name=?:(=('' name.cfg.s) 'My catalog' name.cfg.s)
+          description=''
+          mode=?-(mode.cfg.s %open %public, %friends %pals, %group %group)
+          friends=friends.cfg.s
+          group-flag=group-flag.cfg.s
+          files=~(key by canopy.s)
+          created=now.bowl
+          modified=now.bowl
+      ==
+    =/  new-catalogs=(map catalog-id catalog-config)
+      ?:  =(~ canopy.s)  ~
+      (my ~[default+default-cat])
+    ::  migrate publish overrides from canopy entries
+    =/  new-pub=(map file-id publish-meta)
+      %-  ~(gas by *(map file-id publish-meta))
+      %+  turn  ~(tap by canopy.s)
+      |=  [fid=file-id ent=canopy-entry]
+      :-  fid
+      [display-name.ent description.ent tags.ent published.ent]
+    ::  migrate subscriptions: old subs watched /canopy on remote ships,
+    ::  now we map each to [ship %default] catalog subscription
+    =/  new-subs=(map [@p catalog-id] ?)
+      %-  ~(gas by *(map [@p catalog-id] ?))
+      %+  turn  ~(tap in subs.s)
+      |=(who=@p [[who %default] %.y])
+    ::  migrate peers similarly
+    =/  new-peers=(map [@p catalog-id] catalog-listing)
+      %-  ~(gas by *(map [@p catalog-id] catalog-listing))
+      %+  turn  ~(tap by peers.s)
+      |=  [who=@p lst=canopy-listing-old]
+      :-  [who %default]
+      :*  host=host.lst
+          catalog-id=%default
+          name=name.lst
+          description=''
+          mode=?-(mode.lst %open %public, %friends %pals, %group %group)
+          entries=entries.lst
+      ==
+    :*  %8
+        f=f.s  b=b.s  v=v.s  s=s.s  al=al.s  inbox=inbox.s
+        trusted=trusted.s  blocked=blocked.s  cache=cache.s
+        catalogs=new-catalogs  pub=new-pub
+        cat-subs=new-subs  cat-peers=new-peers
+    ==
   ::
   ++  six-to-seven
     |=  s=state-6
@@ -179,6 +262,16 @@
         trusted=trusted.s  blocked=blocked.s  cache=cache.s
         canopy=~  cfg=[mode=%open friends=~ name='']  peers=~  subs=~
     ==
+  ::
+  ++  two-to-three
+    |=  s=state-2
+    ^-  state-3
+    [%3 f=f.s b=b.s v=v.s s=s.s al=~]
+  ::
+  ++  three-to-four
+    |=  s=state-3
+    ^-  state-4
+    [%4 f=f.s b=b.s v=v.s s=s.s al=al.s inbox=~ trusted=~ blocked=~ cache=~]
   ::
   ++  zero-to-one
     |=  s=state-0
@@ -239,22 +332,29 @@
         :*  i  name.a  file-mark.a  p.data.a
             tags.a  now.bowl  now.bowl  ''  |
         ==
-      =/  new-state
-        %_  state
-          f  (~(put by f) i fm)
-          b  (~(put by b) i data.a)
-        ==
-      :-  (weld (fact-update [%file-added fm]) (sv-broadcast-all new-state))
+      =/  new-state  state(f (~(put by f) i fm), b (~(put by b) i data.a))
+      :-  (fact-update [%file-added fm])
       new-state
     ::
         %delete
       ?.  (~(has by f) id.a)  `state
+      ::  remove from all catalogs
+      =/  new-cats=(map catalog-id catalog-config)
+        %-  ~(run by catalogs)
+        |=  cat=catalog-config
+        cat(files (~(del in files.cat) id.a))
+      =/  new-pub  (~(del by pub) id.a)
       =/  new-state
         %_  state
           f  (~(del by f) id.a)
           b  (~(del by b) id.a)
+          catalogs  new-cats
+          pub  new-pub
         ==
-      :-  (weld (fact-update [%file-removed id.a]) (sv-broadcast-all new-state))
+      ::  broadcast updated catalogs that contained this file
+      =/  broadcast-cards=(list card)
+        (catalog-broadcast-for-file id.a new-state)
+      :-  (weld (fact-update [%file-removed id.a]) broadcast-cards)
       new-state
     ::
         %rename
@@ -262,46 +362,47 @@
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(name name.a, modified now.bowl)
       =/  new-f  (~(put by f) id.a new-fm)
-      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
-      state(f new-f)
+      =/  new-state  state(f new-f)
+      =/  broadcast-cards  (catalog-broadcast-for-file id.a new-state)
+      :-  (weld (fact-update [%file-updated new-fm]) broadcast-cards)
+      new-state
     ::
         %toggle-star
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(starred !starred.o)
-      =/  new-f  (~(put by f) id.a new-fm)
-      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
-      state(f new-f)
+      :-  (fact-update [%file-updated new-fm])
+      state(f (~(put by f) id.a new-fm))
     ::
         %add-tags
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(tags (~(uni in tags.o) tags.a))
       =/  new-f  (~(put by f) id.a new-fm)
-      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
-      state(f new-f)
+      =/  new-state  state(f new-f)
+      =/  broadcast-cards  (catalog-broadcast-for-file id.a new-state)
+      :-  (weld (fact-update [%file-updated new-fm]) broadcast-cards)
+      new-state
     ::
         %remove-tags
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(tags (~(dif in tags.o) tags.a))
       =/  new-f  (~(put by f) id.a new-fm)
-      :-  (weld (fact-update [%file-updated new-fm]) (sv-broadcast-all state(f new-f)))
-      state(f new-f)
+      =/  new-state  state(f new-f)
+      =/  broadcast-cards  (catalog-broadcast-for-file id.a new-state)
+      :-  (weld (fact-update [%file-updated new-fm]) broadcast-cards)
+      new-state
     ::
         %mkview
       =/  new-v  (~(put by v) name.a [tags.a color.a])
-      =/  new-state  state(v new-v)
-      :-  (weld (fact-update [%view-added name.a tags.a color.a]) (sv-broadcast-all new-state))
-      new-state
+      :-  (fact-update [%view-added name.a tags.a color.a])
+      state(v new-v)
     ::
         %rmview
       ?.  (~(has by v) name.a)  `state
-      =/  kick-cards=(list card)
-        ?.  (~(has by sv) name.a)  ~
-        [%give %kick ~[/shared-view/(scot %tas name.a)] ~]~
-      :-  :(weld (fact-update [%view-removed name.a]) kick-cards)
-      state(v (~(del by v) name.a), sv (~(del by sv) name.a))
+      :-  (fact-update [%view-removed name.a])
+      state(v (~(del by v) name.a))
     ::
         %share
       ?.  (~(has by f) id.a)  `state
@@ -331,7 +432,6 @@
             %agent  [who %grove]  %poke
             %grove-action  !>(`action`[%offer entry])
         ==
-      ::  if notify, ensure a share token exists and DM each added ship
       =/  tk-existing=(unit share-token)
         =/  pairs  ~(tap by s)
         |-  ^-  (unit share-token)
@@ -359,7 +459,6 @@
       state(al (~(put by al) id.a ships.a), s new-s)
     ::
         %offer
-      ::  only foreign ships hit this; routed via top-level %offer guard
       `state
     ::
         %accept-offer
@@ -426,129 +525,125 @@
       :-  (fact-update [%cache-removed owner.a id.a])
       state(cache (~(del by cache) k))
     ::
-        %publish
-      ?.  (~(has by f) id.a)  `state
-      =/  fm  (~(got by f) id.a)
-      =/  nm=@t  ?:(=('' display-name.a) name.fm display-name.a)
-      =/  ent=canopy-entry
-        :*  id=id.a  display-name=nm  file-mark=file-mark.fm
-            size=size.fm  tags=tags.a  published=now.bowl
+    ::  ===  catalog actions  ===
+    ::
+        %create-catalog
+      ?:  (~(has by catalogs) id.a)  `state
+      =/  cat=catalog-config
+        :*  name=name.a
             description=description.a
+            mode=mode.a
+            friends=~
+            group-flag=~
+            files=~
+            created=now.bowl
+            modified=now.bowl
         ==
-      :_  state(canopy (~(put by canopy) id.a ent))
-      %+  weld  (fact-update [%canopy-entry-added ent])
-      (canopy-broadcast state(canopy (~(put by canopy) id.a ent)))
+      :-  (fact-update [%catalog-created id.a cat])
+      state(catalogs (~(put by catalogs) id.a cat))
     ::
-        %unpublish
-      ?.  (~(has by canopy) id.a)  `state
-      =/  new-canopy  (~(del by canopy) id.a)
-      :_  state(canopy new-canopy)
-      %+  weld  (fact-update [%canopy-entry-removed id.a])
-      (canopy-broadcast state(canopy new-canopy))
-    ::
-        %set-canopy-mode
-      =/  new-cfg  cfg(mode mode.a)
+        %delete-catalog
+      ?.  (~(has by catalogs) id.a)  `state
+      ::  kick all subscribers to this catalog
       =/  kick-cards=(list card)
-        ?.  &(=(mode.a %friends) !=(mode.cfg %friends))  ~
-        ::  kick non-friends from /canopy sub
-        ~
-      :-  :(weld (fact-update [%canopy-config-updated new-cfg]) kick-cards (canopy-broadcast state(cfg new-cfg)))
-      state(cfg new-cfg)
+        [%give %kick ~[/catalog/(scot %tas id.a)] ~]~
+      :-  (weld (fact-update [%catalog-deleted id.a]) kick-cards)
+      state(catalogs (~(del by catalogs) id.a))
     ::
-        %add-friend
-      =/  new-friends  (~(put in friends.cfg) who.a)
-      =/  new-cfg  cfg(friends new-friends)
-      :-  (fact-update [%canopy-config-updated new-cfg])
-      state(cfg new-cfg)
-    ::
-        %remove-friend
-      =/  new-friends  (~(del in friends.cfg) who.a)
-      =/  new-cfg  cfg(friends new-friends)
-      :-  (fact-update [%canopy-config-updated new-cfg])
-      state(cfg new-cfg)
-    ::
-        %set-canopy-group
-      =/  new-cfg  cfg(group-flag flag.a)
-      :-  :(weld (fact-update [%canopy-config-updated new-cfg]) (canopy-broadcast state(cfg new-cfg)))
-      state(cfg new-cfg)
-    ::
-        %set-canopy-name
-      =/  new-cfg  cfg(name name.a)
-      :-  :(weld (fact-update [%canopy-config-updated new-cfg]) (canopy-broadcast state(cfg new-cfg)))
-      state(cfg new-cfg)
-    ::
-        %subscribe-to
-      ?:  (~(has in subs) who.a)  `state
-      =/  wire=path  /canopy-sub/(scot %p who.a)
-      :_  state(subs (~(put in subs) who.a))
-      :~  [%pass wire %agent [who.a %grove] %watch /canopy]
-      ==
-    ::
-        %unsubscribe-from
-      ?.  (~(has in subs) who.a)  `state
-      =/  wire=path  /canopy-sub/(scot %p who.a)
-      :_  %_  state
-            subs  (~(del in subs) who.a)
-            peers  (~(del by peers) who.a)
-          ==
-      %+  weld
-        `(list card)`~[[%pass wire %agent [who.a %grove] %leave ~]]
-      (fact-update [%canopy-peer-removed who.a])
-    ::
-        %share-view
-      ?.  (~(has by v) name.a)  `state
-      =/  svc=shared-view-config  [allowed.a group-flag.a]
-      =/  old-svc  (~(get by sv) name.a)
-      =/  old-allowed=(set @p)
-        ?~  old-svc  ~
-        allowed.u.old-svc
-      =/  new-ships=(set @p)  (~(dif in allowed.a) old-allowed)
-      =/  new-state  state(sv (~(put by sv) name.a svc))
-      =/  invite-cards=(list card)
-        %+  turn  ~(tap in new-ships)
-        |=  who=@p
-        [%pass /sv-invite/(scot %p who)/(scot %tas name.a) %agent [who %grove] %poke %grove-action !>(`action`[%sv-invite our.bowl name.a])]
-      :-  :(weld (fact-update [%view-shared name.a allowed.a group-flag.a]) (sv-broadcast-all new-state) invite-cards)
+        %update-catalog
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(name name.a, description description.a, modified now.bowl)
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
       new-state
     ::
-        %unshare-view
-      ?.  (~(has by sv) name.a)  `state
-      =/  kick-cards=(list card)
-        [%give %kick ~[/shared-view/(scot %tas name.a)] ~]~
-      :-  (weld (fact-update [%view-unshared name.a]) kick-cards)
-      state(sv (~(del by sv) name.a))
+        %set-catalog-mode
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(mode mode.a, modified now.bowl)
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
+      new-state
     ::
-        %subscribe-view
-      =/  wire=path  /sv-sub/(scot %p who.a)/(scot %tas name.a)
-      :_  state
-      :~  [%pass wire %agent [who.a %grove] %watch /shared-view/(scot %tas name.a)]
+        %set-catalog-group
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(group-flag flag.a, modified now.bowl)
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
+      new-state
+    ::
+        %add-catalog-friend
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(friends (~(put in friends.u.cat) who.a))
+      :-  (fact-update [%catalog-updated id.a new-cat])
+      state(catalogs (~(put by catalogs) id.a new-cat))
+    ::
+        %remove-catalog-friend
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(friends (~(del in friends.u.cat) who.a))
+      :-  (fact-update [%catalog-updated id.a new-cat])
+      state(catalogs (~(put by catalogs) id.a new-cat))
+    ::
+        %add-to-catalog
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      ?.  (~(has by f) file-id.a)  `state
+      =/  new-cat  u.cat(files (~(put in files.u.cat) file-id.a), modified now.bowl)
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      ::  store publish overrides
+      =/  pm=publish-meta
+        [display-name.a description.a tags.a now.bowl]
+      =/  new-state  new-state(pub (~(put by pub.new-state) file-id.a pm))
+      :-  %+  weld  (fact-update [%catalog-file-added id.a file-id.a])
+          (catalog-broadcast id.a new-state)
+      new-state
+    ::
+        %remove-from-catalog
+      =/  cat  (~(get by catalogs) id.a)
+      ?~  cat  `state
+      =/  new-cat  u.cat(files (~(del in files.u.cat) file-id.a), modified now.bowl)
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      ::  remove pub override if file not in any other catalog
+      =/  still-published=?
+        %+  lien  ~(val by catalogs.new-state)
+        |=(c=catalog-config (~(has in files.c) file-id.a))
+      =/  new-state
+        ?.  still-published
+          new-state(pub (~(del by pub.new-state) file-id.a))
+        new-state
+      :-  %+  weld  (fact-update [%catalog-file-removed id.a file-id.a])
+          (catalog-broadcast id.a new-state)
+      new-state
+    ::
+        %subscribe-catalog
+      =/  k=[@p catalog-id]  [who.a catalog-id.a]
+      ?:  (~(has by cat-subs) k)  `state
+      =/  wire=path  /cat-sub/(scot %p who.a)/(scot %tas catalog-id.a)
+      :_  state(cat-subs (~(put by cat-subs) k %.y))
+      :~  [%pass wire %agent [who.a %grove] %watch /catalog/(scot %tas catalog-id.a)]
       ==
     ::
-        %sv-invite
-      =/  k=[@p @t]  [host.a name.a]
-      ?:  (~(has by sv-subs) k)  `state
-      =/  wire=path  /sv-sub/(scot %p host.a)/(scot %tas name.a)
-      :_  state
-      :~  [%pass wire %agent [host.a %grove] %watch /shared-view/(scot %tas name.a)]
-      ==
-    ::
-        %unsubscribe-view
-      =/  wire=path  /sv-sub/(scot %p who.a)/(scot %tas name.a)
-      =/  k=[@p @t]  [who.a name.a]
+        %unsubscribe-catalog
+      =/  k=[@p catalog-id]  [who.a catalog-id.a]
+      ?.  (~(has by cat-subs) k)  `state
+      =/  wire=path  /cat-sub/(scot %p who.a)/(scot %tas catalog-id.a)
       :_  %_  state
-            sv-subs  (~(del by sv-subs) k)
-            sv-peers  (~(del by sv-peers) k)
+            cat-subs  (~(del by cat-subs) k)
+            cat-peers  (~(del by cat-peers) k)
           ==
       %+  weld
         `(list card)`~[[%pass wire %agent [who.a %grove] %leave ~]]
-      (fact-update [%shared-view-removed who.a name.a])
+      (fact-update [%catalog-peer-removed who.a catalog-id.a])
     ==
   ::
   ++  handle-offer
     |=  [from=@p entry=inbox-entry]
     ^-  (quip card _state)
     ?:  (~(has in blocked) from)  `state
-    ::  enforce that owner field matches the actual sender
     =/  ent  entry(owner from)
     =/  k=[@p file-id]  [from id.ent]
     =/  auto  (~(has in trusted) from)
@@ -560,10 +655,86 @@
     :-  (fact-update [%inbox-updated ent2])
     state(inbox (~(put by inbox) k ent2))
   ::
+  ::  ===  helpers  ===
+  ::
   ++  fact-update
     |=  u=update
     ^-  (list card)
     [%give %fact ~[/updates] %json !>((update-json u))]~
+  ::
+  ++  is-pal
+    |=  who=@p
+    ^-  ?
+    =/  res=(unit ?)
+      %-  mole
+      |.(.^(? %gx /(scot %p our.bowl)/pals/(scot %da now.bowl)/mutuals/(scot %p who)/noun))
+    ?~  res  %.n
+    u.res
+  ::
+  ++  catalog-access-ok
+    |=  [src=@p cat=catalog-config]
+    ^-  ?
+    ?|  =(our.bowl src)
+        ?-  mode.cat
+          %public  %.y
+          %pals    ?|((~(has in friends.cat) src) (is-pal src))
+          %group
+            ?~  group-flag.cat  %.n
+            =/  gf  u.group-flag.cat
+            =/  res=(unit json)
+              (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
+            ?~  res  %.n
+            ?.  ?=([%o *] u.res)  %.n
+            =/  fl  (~(get by p.u.res) 'fleet')
+            ?~  fl  %.n
+            ?.  ?=([%o *] u.fl)  %.n
+            (~(has by p.u.fl) (scot %p src))
+        ==
+    ==
+  ::
+  ++  build-entry
+    |=  fid=file-id
+    ^-  (unit canopy-entry)
+    =/  fm  (~(get by f) fid)
+    ?~  fm  ~
+    =/  pm  (~(get by pub) fid)
+    %-  some
+    :*  id=fid
+        display-name=?~(pm name.u.fm ?:(=('' display-name.u.pm) name.u.fm display-name.u.pm))
+        file-mark=file-mark.u.fm
+        size=size.u.fm
+        tags=?~(pm tags.u.fm ?:(=(~ tags.u.pm) tags.u.fm tags.u.pm))
+        published=?~(pm now.bowl published.u.pm)
+        description=?~(pm description.u.fm ?:(=('' description.u.pm) description.u.fm description.u.pm))
+    ==
+  ::
+  ++  build-catalog-listing
+    |=  [cid=catalog-id cat=catalog-config]
+    ^-  catalog-listing
+    =/  entries=(list canopy-entry)
+      %+  murn  ~(tap in files.cat)
+      |=(fid=file-id (build-entry fid))
+    :*  host=our.bowl  catalog-id=cid  name=name.cat
+        description=description.cat  mode=mode.cat
+        entries=entries
+    ==
+  ::
+  ++  catalog-broadcast
+    |=  [cid=catalog-id st=_state]
+    ^-  (list card)
+    =/  cat  (~(get by catalogs.st) cid)
+    ?~  cat  ~
+    =/  lst  (build-catalog-listing cid u.cat)
+    [%give %fact ~[/catalog/(scot %tas cid)] %grove-catalog-listing !>(lst)]~
+  ::
+  ++  catalog-broadcast-for-file
+    |=  [fid=file-id st=_state]
+    ^-  (list card)
+    %-  zing
+    %+  turn  ~(tap by catalogs.st)
+    |=  [cid=catalog-id cat=catalog-config]
+    ?.  (~(has in files.cat) fid)  ~
+    (catalog-broadcast cid st)
   ::
   ++  update-json
     |=  u=update
@@ -653,67 +824,51 @@
           ['fileId' s+(scot %uv id.u)]
       ==
     ::
-        %canopy-entry-added
+        %catalog-created
       %-  pairs
-      :~  type+s+'canopyEntryAdded'
-          entry+(ce-upd-json canopy-entry.u)
+      :~  type+s+'catalogCreated'
+          ['catalogId' s+(crip (trip id.u))]
+          config+(catalog-config-json config.u)
       ==
     ::
-        %canopy-entry-removed
+        %catalog-deleted
       %-  pairs
-      :~  type+s+'canopyEntryRemoved'
-          ['fileId' s+(scot %uv id.u)]
+      :~  type+s+'catalogDeleted'
+          ['catalogId' s+(crip (trip id.u))]
       ==
     ::
-        %canopy-config-updated
+        %catalog-updated
       %-  pairs
-      :~  type+s+'canopyConfigUpdated'
-          config+(cc-upd-json canopy-config.u)
+      :~  type+s+'catalogUpdated'
+          ['catalogId' s+(crip (trip id.u))]
+          config+(catalog-config-json config.u)
       ==
     ::
-        %canopy-peer-updated
+        %catalog-file-added
       %-  pairs
-      :~  type+s+'canopyPeerUpdated'
-          listing+(cl-upd-json canopy-listing.u)
+      :~  type+s+'catalogFileAdded'
+          ['catalogId' s+(crip (trip catalog-id.u))]
+          ['fileId' s+(scot %uv file-id.u)]
       ==
     ::
-        %canopy-peer-removed
+        %catalog-file-removed
       %-  pairs
-      :~  type+s+'canopyPeerRemoved'
+      :~  type+s+'catalogFileRemoved'
+          ['catalogId' s+(crip (trip catalog-id.u))]
+          ['fileId' s+(scot %uv file-id.u)]
+      ==
+    ::
+        %catalog-peer-updated
+      %-  pairs
+      :~  type+s+'catalogPeerUpdated'
+          listing+(catalog-listing-json catalog-listing.u)
+      ==
+    ::
+        %catalog-peer-removed
+      %-  pairs
+      :~  type+s+'catalogPeerRemoved'
           host+s+(scot %p host.u)
-      ==
-    ::
-        %view-shared
-      %-  pairs
-      :~  type+s+'viewShared'
-          name+s+name.u
-          allowed+a+(turn ~(tap in allowed.u) |=(p=@p s+(scot %p p)))
-          :-  %group-flag
-          ?~  group-flag.u  ~
-          =/  gf  u.group-flag.u
-          %-  pairs
-          :~  host+s+(scot %p -.gf)
-              name+s++.gf
-          ==
-      ==
-    ::
-        %view-unshared
-      %-  pairs
-      :~  type+s+'viewUnshared'
-          name+s+name.u
-      ==
-    ::
-        %shared-view-updated
-      %-  pairs
-      :~  type+s+'sharedViewUpdated'
-          listing+(gvl-json grove-view-listing.u)
-      ==
-    ::
-        %shared-view-removed
-      %-  pairs
-      :~  type+s+'sharedViewRemoved'
-          host+s+(scot %p host.u)
-          name+s+name.u
+          ['catalogId' s+(crip (trip catalog-id.u))]
       ==
     ==
   ::
@@ -761,7 +916,7 @@
         accepted+b+accepted.e
     ==
   ::
-  ++  ce-upd-json
+  ++  ce-json
     |=  e=canopy-entry
     ^-  json
     %-  pairs:enjs:format
@@ -774,13 +929,17 @@
         description+s+description.e
     ==
   ::
-  ++  cc-upd-json
-    |=  c=canopy-config
+  ++  catalog-config-json
+    |=  c=catalog-config
     ^-  json
     %-  pairs:enjs:format
-    :~  mode+s+(crip (trip mode.c))
-        name+s+name.c
+    :~  name+s+name.c
+        description+s+description.c
+        mode+s+(crip (trip mode.c))
         friends+a+(turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))
+        files+a+(turn ~(tap in files.c) |=(fid=file-id s+(scot %uv fid)))
+        created+s+(scot %da created.c)
+        modified+s+(scot %da modified.c)
         :-  %group-flag
         ?~  group-flag.c  ~
         =/  gf  u.group-flag.c
@@ -790,61 +949,17 @@
         ==
     ==
   ::
-  ++  cl-upd-json
-    |=  l=canopy-listing
+  ++  catalog-listing-json
+    |=  l=catalog-listing
     ^-  json
     %-  pairs:enjs:format
     :~  host+s+(scot %p host.l)
+        ['catalogId' s+(crip (trip catalog-id.l))]
         name+s+name.l
+        description+s+description.l
         mode+s+(crip (trip mode.l))
-        entries+a+(turn entries.l ce-upd-json)
+        entries+a+(turn entries.l ce-json)
     ==
-  ::
-  ++  gvl-json
-    |=  l=grove-view-listing
-    ^-  json
-    %-  pairs:enjs:format
-    :~  host+s+(scot %p host.l)
-        name+s+name.l
-        tags+a+(turn tags.l |=(t=tag s+(crip (trip t))))
-        color+s+color.l
-        files+a+(turn files.l fm-json)
-    ==
-  ::
-  ++  canopy-listing-from
-    |=  st=_state
-    ^-  canopy-listing
-    :*  host=our.bowl  name=name.cfg.st  mode=mode.cfg.st
-        entries=~(val by canopy.st)
-    ==
-  ::
-  ++  canopy-broadcast
-    |=  st=_state
-    ^-  (list card)
-    [%give %fact ~[/canopy] %grove-canopy-listing !>((canopy-listing-from st))]~
-  ::
-  ++  sv-broadcast-all
-    |=  st=_state
-    ^-  (list card)
-    ?:  =(~ sv.st)  ~
-    %-  zing
-    %+  turn  ~(tap by sv.st)
-    |=  [nm=@t svc=shared-view-config]
-    (sv-broadcast-one nm st)
-  ::
-  ++  sv-broadcast-one
-    |=  [nm=@t st=_state]
-    ^-  (list card)
-    =/  vw  (~(get by v.st) nm)
-    ?~  vw  ~
-    =/  tgs=(set tag)  -.u.vw
-    =/  clr=@t  +.u.vw
-    =/  matching=(list file-meta)
-      %+  skim  ~(val by f.st)
-      |=(m=file-meta =(tgs (~(int in tags.m) tgs)))
-    =/  lst=grove-view-listing
-      [host=our.bowl name=nm tags=~(tap in tgs) color=clr files=matching]
-    [%give %fact ~[/shared-view/(scot %tas nm)] %grove-view-listing !>(`grove-view-listing`lst)]~
   ::
   ++  dm-notify
     |=  [target=@p tk=share-token fname=@t burl=@t]
@@ -1002,23 +1117,28 @@
     [%x %inbox ~]    ``json+!>(`json`(inbox-json ~))
     [%x %trusted ~]  ``json+!>(`json`(trusted-json ~))
     [%x %cache ~]    ``json+!>(`json`(cache-json ~))
-    [%x %canopy %entries ~]  ``json+!>(`json`(canopy-entries-json ~))
-    [%x %canopy %config ~]   ``json+!>(`json`(canopy-config-json ~))
-    [%x %canopy %peers ~]    ``json+!>(`json`(canopy-peers-json ~))
-    [%x %canopy %peer @ ~]
-      =/  who  (slav %p i.t.t.t.path)
-      =/  lst  (~(get by peers) who)
-      ?~  lst  ``json+!>(`json`~)
-      ``json+!>(`json`(canopy-listing-json u.lst))
-    [%x %canopy %search @ ~]
+    ::  catalog scry paths
+    [%x %catalogs ~]          ``json+!>(`json`(catalogs-json ~))
+    [%x %catalog @ %config ~]
+      =/  cid=catalog-id  i.t.t.path
+      =/  cat  (~(get by catalogs) cid)
+      ?~  cat  ``json+!>(`json`~)
+      ``json+!>(`json`(catalog-config-json u.cat))
+    [%x %catalog @ %entries ~]
+      =/  cid=catalog-id  i.t.t.path
+      =/  cat  (~(get by catalogs) cid)
+      ?~  cat  ``json+!>(`json`[%a ~])
+      =/  entries=(list canopy-entry)
+        %+  murn  ~(tap in files.u.cat)
+        |=(fid=file-id (build-entry fid))
+      ``json+!>(`json`[%a (turn entries ce-json)])
+    [%x %catalog-peers ~]    ``json+!>(`json`(catalog-peers-json ~))
+    [%x %catalog-subs ~]     ``json+!>(`json`(catalog-subs-json ~))
+    [%x %catalog %search @ ~]
       =/  term=@t  i.t.t.t.path
-      ``json+!>(`json`(canopy-search-json term))
-    [%x %canopy %groups ~]
+      ``json+!>(`json`(catalog-search-json term))
+    [%x %catalog %groups ~]
       ``json+!>(`json`(available-groups-json ~))
-    [%x %shared-views ~]
-      ``json+!>(`json`(shared-views-json ~))
-    [%x %shared-view-peers ~]
-      ``json+!>(`json`(shared-view-peers-json ~))
   ==
   ::
   ++  files-json
@@ -1033,23 +1153,10 @@
     %+  turn  ~(tap by v)
     |=  [name=@t tags=(set @tas) color=@t]
     ^-  json
-    =/  svc  (~(get by sv) name)
     %-  pairs:enjs:format
     :~  name+s+name
         tags+[%a (turn ~(tap in tags) |=(t=@tas s+(crip (trip t))))]
         color+s+color
-        :-  %shared
-        ?~  svc  ~
-        %-  pairs:enjs:format
-        :~  allowed+[%a (turn ~(tap in allowed.u.svc) |=(p=@p s+(scot %p p)))]
-            :-  %group-flag
-            ?~  group-flag.u.svc  ~
-            =/  gf  u.group-flag.u.svc
-            %-  pairs:enjs:format
-            :~  host+s+(scot %p -.gf)
-                name+s++.gf
-            ==
-        ==
     ==
   ::
   ++  shares-json
@@ -1070,6 +1177,11 @@
     |=  m=file-meta
     ^-  json
     =/  allowed  (~(gut by al) id.m *(set @p))
+    ::  find which catalogs this file belongs to
+    =/  in-catalogs=(list @tas)
+      %+  murn  ~(tap by catalogs)
+      |=  [cid=catalog-id cat=catalog-config]
+      ?:((~(has in files.cat) id.m) `cid ~)
     %-  pairs:enjs:format
     :~  id+s+(scot %uv id.m)
         name+s+name.m
@@ -1081,6 +1193,7 @@
         description+s+description.m
         starred+b+starred.m
         allowed+[%a (turn ~(tap in allowed) |=(p=@p s+(scot %p p)))]
+        ['inCatalogs' [%a (turn in-catalogs |=(cid=@tas s+(crip (trip cid))))]]
     ==
   ::
   ++  inbox-json
@@ -1119,39 +1232,119 @@
         meta+(file-meta-json -.v)
     ==
   ::
-  ++  canopy-entry-json
+  ++  catalogs-json
+    |=  *
+    ^-  json
+    :-  %a
+    %+  turn  ~(tap by catalogs)
+    |=  [cid=catalog-id cat=catalog-config]
+    %-  pairs:enjs:format
+    :~  ['catalogId' s+(crip (trip cid))]
+        config+(catalog-config-json cat)
+    ==
+  ::
+  ++  catalog-peers-json
+    |=  *
+    ^-  json
+    :-  %a
+    %+  turn  ~(tap by cat-peers)
+    |=  [k=[@p catalog-id] lst=catalog-listing]
+    (catalog-listing-json lst)
+  ::
+  ++  catalog-subs-json
+    |=  *
+    ^-  json
+    :-  %a
+    %+  turn  ~(tap by cat-subs)
+    |=  [k=[@p catalog-id] ?]
+    %-  pairs:enjs:format
+    :~  host+s+(scot %p -.k)
+        ['catalogId' s+(crip (trip +.k))]
+    ==
+  ::
+  ++  catalog-search-json
+    |=  term=@t
+    ^-  json
+    =/  needle=tape  (cass (trip term))
+    :-  %a
+    %-  zing
+    %+  turn  ~(tap by cat-peers)
+    |=  [k=[@p catalog-id] lst=catalog-listing]
+    %+  turn
+      %+  skim  entries.lst
+      |=  e=canopy-entry
+      ?|  !=(~ (find needle (cass (trip display-name.e))))
+          (~(has in tags.e) (crip needle))
+          !=(~ (find needle (cass (trip description.e))))
+      ==
     |=  e=canopy-entry
     ^-  json
     %-  pairs:enjs:format
-    :~  id+s+(scot %uv id.e)
-        display-name+s+display-name.e
-        file-mark+s+(crip (trip file-mark.e))
-        size+(numb:enjs:format size.e)
-        tags+[%a (turn ~(tap in tags.e) |=(t=@tas s+(crip (trip t))))]
-        published+s+(scot %da published.e)
-        description+s+description.e
+    :~  host+s+(scot %p host.lst)
+        ['catalogId' s+(crip (trip catalog-id.lst))]
+        ['catalogName' s+name.lst]
+        entry+(ce-json e)
     ==
   ::
-  ++  canopy-entries-json
-    |=  *
-    ^-  json
-    [%a (turn ~(val by canopy) canopy-entry-json)]
+  ++  build-entry
+    |=  fid=file-id
+    ^-  (unit canopy-entry)
+    =/  fm  (~(get by f) fid)
+    ?~  fm  ~
+    =/  pm  (~(get by pub) fid)
+    %-  some
+    :*  id=fid
+        display-name=?~(pm name.u.fm ?:(=('' display-name.u.pm) name.u.fm display-name.u.pm))
+        file-mark=file-mark.u.fm
+        size=size.u.fm
+        tags=?~(pm tags.u.fm ?:(=(~ tags.u.pm) tags.u.fm tags.u.pm))
+        published=?~(pm now.bowl published.u.pm)
+        description=?~(pm description.u.fm ?:(=('' description.u.pm) description.u.fm description.u.pm))
+    ==
   ::
-  ++  canopy-config-json
-    |=  *
+  ++  catalog-config-json
+    |=  c=catalog-config
     ^-  json
     %-  pairs:enjs:format
-    :~  mode+s+(crip (trip mode.cfg))
-        name+s+name.cfg
-        friends+[%a (turn ~(tap in friends.cfg) |=(p=@p s+(scot %p p)))]
-        subscriptions+[%a (turn ~(tap in subs) |=(p=@p s+(scot %p p)))]
+    :~  name+s+name.c
+        description+s+description.c
+        mode+s+(crip (trip mode.c))
+        friends+a+(turn ~(tap in friends.c) |=(p=@p s+(scot %p p)))
+        files+a+(turn ~(tap in files.c) |=(fid=file-id s+(scot %uv fid)))
+        created+s+(scot %da created.c)
+        modified+s+(scot %da modified.c)
         :-  %group-flag
-        ?~  group-flag.cfg  ~
-        =/  gf  u.group-flag.cfg
+        ?~  group-flag.c  ~
+        =/  gf  u.group-flag.c
         %-  pairs:enjs:format
         :~  host+s+(scot %p -.gf)
             name+s++.gf
         ==
+    ==
+  ::
+  ++  ce-json
+    |=  e=canopy-entry
+    ^-  json
+    %-  pairs:enjs:format
+    :~  id+s+(scot %uv id.e)
+        ['displayName' s+display-name.e]
+        ['fileMark' s+(crip (trip file-mark.e))]
+        size+(numb:enjs:format size.e)
+        tags+a+(turn ~(tap in tags.e) |=(t=@tas s+t))
+        published+s+(scot %da published.e)
+        description+s+description.e
+    ==
+  ::
+  ++  catalog-listing-json
+    |=  l=catalog-listing
+    ^-  json
+    %-  pairs:enjs:format
+    :~  host+s+(scot %p host.l)
+        ['catalogId' s+(crip (trip catalog-id.l))]
+        name+s+name.l
+        description+s+description.l
+        mode+s+(crip (trip mode.l))
+        entries+a+(turn entries.l ce-json)
     ==
   ::
   ++  available-groups-json
@@ -1190,95 +1383,11 @@
         title+s+title
         members+(numb:enjs:format members)
     ==
-  ::
-  ++  canopy-listing-json
-    |=  lst=canopy-listing
-    ^-  json
-    %-  pairs:enjs:format
-    :~  host+s+(scot %p host.lst)
-        name+s+name.lst
-        mode+s+(crip (trip mode.lst))
-        entries+[%a (turn entries.lst canopy-entry-json)]
-    ==
-  ::
-  ++  canopy-peers-json
-    |=  *
-    ^-  json
-    [%a (turn ~(val by peers) canopy-listing-json)]
-  ::
-  ++  shared-views-json
-    |=  *
-    ^-  json
-    :-  %a
-    %+  turn  ~(tap by sv)
-    |=  [name=@t svc=shared-view-config]
-    ^-  json
-    %-  pairs:enjs:format
-    :~  name+s+name
-        allowed+[%a (turn ~(tap in allowed.svc) |=(p=@p s+(scot %p p)))]
-        :-  %group-flag
-        ?~  group-flag.svc  ~
-        =/  gf  u.group-flag.svc
-        %-  pairs:enjs:format
-        :~  host+s+(scot %p -.gf)
-            name+s++.gf
-        ==
-    ==
-  ::
-  ++  gvl-peek-json
-    |=  l=grove-view-listing
-    ^-  json
-    %-  pairs:enjs:format
-    :~  host+s+(scot %p host.l)
-        name+s+name.l
-        tags+a+(turn tags.l |=(t=tag s+(crip (trip t))))
-        color+s+color.l
-        files+a+(turn files.l file-meta-json)
-    ==
-  ::
-  ++  shared-view-peers-json
-    |=  *
-    ^-  json
-    :-  %a
-    %+  turn  ~(tap by sv-peers)
-    |=  [k=[@p @t] lst=grove-view-listing]
-    (gvl-peek-json lst)
-  ::
-  ++  canopy-search-json
-    |=  term=@t
-    ^-  json
-    =/  needle=tape  (cass (trip term))
-    :-  %a
-    %-  zing
-    %+  turn  ~(tap by peers)
-    |=  [host=@p lst=canopy-listing]
-    %+  turn
-      %+  skim  entries.lst
-      |=  e=canopy-entry
-      ?|  !=(~ (find needle (cass (trip display-name.e))))
-          (~(has in tags.e) (crip needle))
-      ==
-    |=  e=canopy-entry
-    ^-  json
-    %-  pairs:enjs:format
-    :~  host+s+(scot %p host)
-        entry+(canopy-entry-json e)
-    ==
   --
 ++  on-watch
   |=  =path
   ^-  (quip card _this)
-  =/  src-in-group=?
-    ?~  group-flag.cfg  %.n
-    =/  gf  u.group-flag.cfg
-    =/  res=(unit json)
-      (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
-    ?~  res  %.n
-    ?.  ?=([%o *] u.res)  %.n
-    =/  fl  (~(get by p.u.res) 'fleet')
-    ?~  fl  %.n
-    ?.  ?=([%o *] u.fl)  %.n
-    (~(has by p.u.fl) (scot %p src.bowl))
+  |^
   ?+  path  (on-watch:def path)
     [%http-response *]  `this
     [%updates ~]        `this
@@ -1290,17 +1399,16 @@
       :_  this
       [%give %kick ~ ~]~
     =/  allowed  (~(gut by al) fid *(set @p))
-    =/  canopy-ok=?
-      ?&  (~(has by canopy) fid)
-          ?-  mode.cfg
-            %open     %.y
-            %friends  (~(has in friends.cfg) src.bowl)
-            %group    src-in-group
-          ==
+    ::  check if file is in any public/accessible catalog
+    =/  catalog-ok=?
+      %+  lien  ~(val by catalogs)
+      |=  cat=catalog-config
+      ?&  (~(has in files.cat) fid)
+          (catalog-access-ok src.bowl cat)
       ==
     ?.  ?|  =(our.bowl src.bowl)
             (~(has in allowed) src.bowl)
-            canopy-ok
+            catalog-ok
         ==
       :_  this
       :~  [%give %fact ~ %grove-remote !>(`grove-remote`[%denied fid])]
@@ -1315,69 +1423,85 @@
         [%give %kick ~ ~]
     ==
   ::
-      [%shared-view @ ~]
-    =/  nm=@t  i.t.path
-    =/  svc  (~(get by sv) nm)
-    ?~  svc
+      [%catalog @ ~]
+    =/  cid=catalog-id  i.t.path
+    =/  cat  (~(get by catalogs) cid)
+    ?~  cat
       :_  this
       [%give %kick ~ ~]~
-    =/  src-in-sv-group=?
-      ?~  group-flag.u.svc  %.n
-      =/  gf  u.group-flag.u.svc
-      =/  res=(unit json)
-        (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
-      ?~  res  %.n
-      ?.  ?=([%o *] u.res)  %.n
-      =/  fl  (~(get by p.u.res) 'fleet')
-      ?~  fl  %.n
-      ?.  ?=([%o *] u.fl)  %.n
-      (~(has by p.u.fl) (scot %p src.bowl))
-    =/  ok=?
-      ?|  =(our.bowl src.bowl)
-          (~(has in allowed.u.svc) src.bowl)
-          src-in-sv-group
-      ==
-    ?.  ok
+    ?.  (catalog-access-ok src.bowl u.cat)
       :_  this
       [%give %kick ~ ~]~
-    =/  vw  (~(get by v) nm)
-    ?~  vw
-      :_  this
-      [%give %kick ~ ~]~
-    =/  tgs=(set tag)  -.u.vw
-    =/  clr=@t  +.u.vw
-    =/  matching=(list file-meta)
-      (skim ~(val by f) |=(m=file-meta =(tgs (~(int in tags.m) tgs))))
-    =/  lst=grove-view-listing
-      [host=our.bowl name=nm tags=~(tap in tgs) color=clr files=matching]
+    =/  lst  (build-catalog-listing cid u.cat)
     :_  this
-    :~  [%give %fact ~ %grove-view-listing !>(`grove-view-listing`lst)]
-    ==
-  ::
-      [%canopy ~]
-    =/  ok=?
-      ?-  mode.cfg
-        %open     %.y
-        %friends  |(=(our.bowl src.bowl) (~(has in friends.cfg) src.bowl))
-        %group    |(=(our.bowl src.bowl) src-in-group)
-      ==
-    ?.  ok
-      :_  this
-      [%give %kick ~ ~]~
-    =/  lst=canopy-listing
-      :*  host=our.bowl  name=name.cfg  mode=mode.cfg
-          entries=~(val by canopy)
-      ==
-    :_  this
-    :~  [%give %fact ~ %grove-canopy-listing !>(`canopy-listing`lst)]
+    :~  [%give %fact ~ %grove-catalog-listing !>(lst)]
     ==
   ==
+  ::
+  ++  is-pal
+    |=  who=@p
+    ^-  ?
+    =/  res=(unit ?)
+      %-  mole
+      |.(.^(? %gx /(scot %p our.bowl)/pals/(scot %da now.bowl)/mutuals/(scot %p who)/noun))
+    ?~  res  %.n
+    u.res
+  ::
+  ++  catalog-access-ok
+    |=  [src=@p cat=catalog-config]
+    ^-  ?
+    ?|  =(our.bowl src)
+        ?-  mode.cat
+          %public  %.y
+          %pals    ?|((~(has in friends.cat) src) (is-pal src))
+          %group
+            ?~  group-flag.cat  %.n
+            =/  gf  u.group-flag.cat
+            =/  res=(unit json)
+              (mole |.(.^(json %gx /(scot %p our.bowl)/groups/(scot %da now.bowl)/v2/groups/(scot %p -.gf)/(scot %tas +.gf)/json)))
+            ?~  res  %.n
+            ?.  ?=([%o *] u.res)  %.n
+            =/  fl  (~(get by p.u.res) 'fleet')
+            ?~  fl  %.n
+            ?.  ?=([%o *] u.fl)  %.n
+            (~(has by p.u.fl) (scot %p src))
+        ==
+    ==
+  ::
+  ++  build-entry
+    |=  fid=file-id
+    ^-  (unit canopy-entry)
+    =/  fm  (~(get by f) fid)
+    ?~  fm  ~
+    =/  pm  (~(get by pub) fid)
+    %-  some
+    :*  id=fid
+        display-name=?~(pm name.u.fm ?:(=('' display-name.u.pm) name.u.fm display-name.u.pm))
+        file-mark=file-mark.u.fm
+        size=size.u.fm
+        tags=?~(pm tags.u.fm ?:(=(~ tags.u.pm) tags.u.fm tags.u.pm))
+        published=?~(pm now.bowl published.u.pm)
+        description=?~(pm description.u.fm ?:(=('' description.u.pm) description.u.fm description.u.pm))
+    ==
+  ::
+  ++  build-catalog-listing
+    |=  [cid=catalog-id cat=catalog-config]
+    ^-  catalog-listing
+    =/  entries=(list canopy-entry)
+      %+  murn  ~(tap in files.cat)
+      |=(fid=file-id (build-entry fid))
+    :*  host=our.bowl  catalog-id=cid  name=name.cat
+        description=description.cat  mode=mode.cat
+        entries=entries
+    ==
+  --
 ++  on-arvo
   |=  [=wire =sign-arvo]
   ?+  wire  (on-arvo:def wire sign-arvo)
     [%bind ~]         `this
     [%bind-share ~]   `this
     [%bind-file ~]    `this
+    [%bind-remote ~]  `this
   ==
 ++  on-leave  on-leave:def
 ++  on-agent
@@ -1390,70 +1514,63 @@
       [%notify-dm @ @ ~]
     `this
   ::
-      [%canopy-sub @ ~]
-    =/  who=@p  (slav %p i.t.wire)
+      [%cat-sub @ @ ~]
+    =/  who=@p         (slav %p i.t.wire)
+    =/  cid=catalog-id  i.t.t.wire
+    =/  k=[@p catalog-id]  [who cid]
     ?+  -.sign  (on-agent:def wire sign)
         %watch-ack
       ?~  p.sign  `this
-      :_  this(subs (~(del in subs) who), peers (~(del by peers) who))
-      [%give %fact ~[/updates] %grove-update !>(`update`[%canopy-peer-removed who])]~
-    ::
-        %kick
-      :_  this(subs (~(del in subs) who), peers (~(del by peers) who))
-      [%give %fact ~[/updates] %grove-update !>(`update`[%canopy-peer-removed who])]~
-    ::
-        %fact
-      ?.  =(p.cage.sign %grove-canopy-listing)
-        (on-agent:def wire sign)
-      =/  lst  !<(canopy-listing q.cage.sign)
-      :_  this(peers (~(put by peers) who lst))
-      [%give %fact ~[/updates] %grove-update !>(`update`[%canopy-peer-updated lst])]~
-    ==
-  ::
-      [%sv-sub @ @ ~]
-    =/  who=@p   (slav %p i.t.wire)
-    =/  nm=@t    i.t.t.wire
-    =/  k=[@p @t]  [who nm]
-    ?+  -.sign  (on-agent:def wire sign)
-        %watch-ack
-      ?~  p.sign
-        :_  this(sv-subs (~(put by sv-subs) k %.y))
-        ~
-      :_  this(sv-subs (~(del by sv-subs) k), sv-peers (~(del by sv-peers) k))
-      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewRemoved' host+s+(scot %p who) name+s+nm]))]~
-    ::
-        %kick
-      :_  this(sv-subs (~(del by sv-subs) k), sv-peers (~(del by sv-peers) k))
-      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewRemoved' host+s+(scot %p who) name+s+nm]))]~
-    ::
-        %fact
-      ?.  =(p.cage.sign %grove-view-listing)
-        (on-agent:def wire sign)
-      =/  lst  !<(grove-view-listing q.cage.sign)
-      =/  gvl-j=json
+      =/  j=json
         %-  pairs:enjs:format
-        :~  host+s+(scot %p host.lst)
-            name+s+name.lst
-            tags+a+(turn tags.lst |=(t=tag s+(crip (trip t))))
-            color+s+color.lst
-            :-  %files
-            :-  %a
-            %+  turn  files.lst
-            |=  m=file-meta
+        :~  type+s+'catalogPeerRemoved'
+            host+s+(scot %p who)
+            ['catalogId' s+(crip (trip cid))]
+        ==
+      :_  this(cat-subs (~(del by cat-subs) k), cat-peers (~(del by cat-peers) k))
+      [%give %fact ~[/updates] %json !>(j)]~
+    ::
+        %kick
+      =/  j=json
+        %-  pairs:enjs:format
+        :~  type+s+'catalogPeerRemoved'
+            host+s+(scot %p who)
+            ['catalogId' s+(crip (trip cid))]
+        ==
+      :_  this(cat-subs (~(del by cat-subs) k), cat-peers (~(del by cat-peers) k))
+      [%give %fact ~[/updates] %json !>(j)]~
+    ::
+        %fact
+      ?.  =(p.cage.sign %grove-catalog-listing)
+        (on-agent:def wire sign)
+      =/  lst  !<(catalog-listing q.cage.sign)
+      =/  j=json
+        %-  pairs:enjs:format
+        :~  type+s+'catalogPeerUpdated'
+            :-  %listing
             %-  pairs:enjs:format
-            :~  id+s+(scot %uv id.m)
-                name+s+name.m
-                file-mark+s+file-mark.m
-                size+(numb:enjs:format size.m)
-                tags+a+(turn ~(tap in tags.m) |=(t=@tas s+t))
-                created+s+(scot %da created.m)
-                modified+s+(scot %da modified.m)
-                description+s+description.m
-                starred+b+starred.m
+            :~  host+s+(scot %p host.lst)
+                ['catalogId' s+(crip (trip catalog-id.lst))]
+                name+s+name.lst
+                description+s+description.lst
+                mode+s+(crip (trip mode.lst))
+                :-  %entries
+                :-  %a
+                %+  turn  entries.lst
+                |=  e=canopy-entry
+                %-  pairs:enjs:format
+                :~  id+s+(scot %uv id.e)
+                    ['displayName' s+display-name.e]
+                    ['fileMark' s+(crip (trip file-mark.e))]
+                    size+(numb:enjs:format size.e)
+                    tags+a+(turn ~(tap in tags.e) |=(t=@tas s+t))
+                    published+s+(scot %da published.e)
+                    description+s+description.e
+                ==
             ==
         ==
-      :_  this(sv-peers (~(put by sv-peers) k lst))
-      [%give %fact ~[/updates] %json !>((pairs:enjs:format ~[type+s+'sharedViewUpdated' listing+gvl-j]))]~
+      :_  this(cat-peers (~(put by cat-peers) k lst))
+      [%give %fact ~[/updates] %json !>(j)]~
     ==
   ::
       [%fetch @ @ ~]

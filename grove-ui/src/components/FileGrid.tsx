@@ -96,6 +96,7 @@ export default function FileGrid({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
     if ((e.target as HTMLElement).closest('[data-file-id]')) return;
 
     e.preventDefault();
@@ -251,7 +252,7 @@ function Card({ file, active, selected, focused, onClick, onOpenViewer, onToggle
       >
         {file.starred ? '★' : '☆'}
       </button>
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+      <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:group-hover:opacity-100">
         <a
           href={fileUrl(file.id)}
           download={file.name}

@@ -1,8 +1,8 @@
 /-  *grove
-|_  lst=canopy-listing
+|_  lst=catalog-listing
 ++  grab
   |%
-  ++  noun  canopy-listing
+  ++  noun  catalog-listing
   --
 ++  grow
   |%

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Selection, View, GroveViewListing } from '../types';
+import type { Selection, View, CatalogConfig, CatalogListing } from '../types';
 import { isGroveDrag, getDragFileIds } from '../dnd';
 import { shortShip } from '../format';
 
@@ -11,36 +11,236 @@ interface Props {
   onNewView: () => void;
   onEditView: (v: View) => void;
   onDeleteView: (v: View) => void;
-  counts: { all: number; starred: number; inbox: number; inboxPending: number; canopy: number; newSharedViews: number };
+  counts: { all: number; starred: number; inbox: number; inboxPending: number };
   connected: boolean;
   shipName: string;
-  canopyPeers: string[];
-  onUnsubscribeCanopy: (ship: string) => void;
+  catalogs: Map<string, CatalogConfig>;
+  catalogPeers: Map<string, CatalogListing>;
+  onUnsubscribeCatalog: (host: string, catalogId: string) => void;
   onDropOnView: (viewName: string, fileIds: string[]) => void;
-  onDropOnCanopy: (fileIds: string[]) => void;
-  svPeers: Map<string, GroveViewListing>;
-  onUnsubscribeSharedView: (host: string, name: string) => void;
+  isDrawer?: boolean;
+  onCloseDrawer?: () => void;
 }
 
 export default function Sidebar({
   views, tagCounts, selection, onSelect, onNewView, onEditView, onDeleteView,
-  counts, connected, shipName, canopyPeers, onUnsubscribeCanopy,
-  onDropOnView, onDropOnCanopy, svPeers, onUnsubscribeSharedView,
+  counts, connected, shipName, catalogs, catalogPeers, onUnsubscribeCatalog,
+  onDropOnView,
+  isDrawer, onCloseDrawer,
 }: Props) {
   const [viewsOpen, setViewsOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [subsOpen, setSubsOpen] = useState(false);
-  // sharedOpen removed – sub-items appear when a shared section is selected
   const [tagFilter, setTagFilter] = useState('');
 
   const filteredTags = tagCounts.filter(([t]) =>
     !tagFilter || t.toLowerCase().includes(tagFilter.toLowerCase())
   );
 
-  const svList = Array.from(svPeers.entries()).map(([, v]) => v);
+  // Group peer listings by host for browse section
+  const peerHosts = Array.from(new Set(
+    Array.from(catalogPeers.values()).map((l) => l.host)
+  )).sort((a, b) => a.localeCompare(b));
+
+  const catalogCount = catalogs.size;
+  const totalFiles = Array.from(catalogs.values()).reduce((n, c) => n + c.files.length, 0);
+
+  const navContent = (
+    <>
+      <div className="py-3">
+        <SidebarItem
+          label="All files"
+          count={counts.all}
+          active={selection.kind === 'all'}
+          onClick={() => onSelect({ kind: 'all' })}
+        />
+        <SidebarItem
+          label="Starred"
+          count={counts.starred}
+          active={selection.kind === 'starred'}
+          onClick={() => onSelect({ kind: 'starred' })}
+          muted
+        />
+
+        <SectionHeader
+          label="Views"
+          open={viewsOpen}
+          onToggle={() => setViewsOpen(!viewsOpen)}
+          onAdd={onNewView}
+          addTitle="New view"
+          tooltip="Filtered collections -- files matching all selected tags"
+        />
+        {viewsOpen && (
+          <div className="mt-1">
+            {views.length === 0 && (
+              <div className="px-4 py-2 text-xs text-faint">No views yet</div>
+            )}
+            {views.map((v) => (
+              <ViewItem
+                key={v.name}
+                view={v}
+                active={selection.kind === 'view' && selection.name === v.name}
+                onClick={() => onSelect({ kind: 'view', name: v.name })}
+                onEdit={() => onEditView(v)}
+                onDelete={() => { if (confirm(`Delete view "${v.name}"?`)) onDeleteView(v); }}
+                onDrop={(ids) => onDropOnView(v.name, ids)}
+              />
+            ))}
+          </div>
+        )}
+
+        <SectionHeader
+          label="Tags"
+          open={tagsOpen}
+          onToggle={() => setTagsOpen(!tagsOpen)}
+        />
+        {tagsOpen && (
+          <div className="mt-1">
+            {tagCounts.length === 0 ? (
+              <div className="px-4 py-2 text-xs text-faint">No tags yet</div>
+            ) : (
+              <>
+                <div className="px-4 pb-1">
+                  <input
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                    placeholder="Search tags..."
+                    className="w-full text-xs border border-border rounded px-2 py-1"
+                  />
+                </div>
+                {filteredTags.map(([tag, count]) => (
+                  <SidebarItem
+                    key={tag}
+                    label={`#${tag}`}
+                    count={count}
+                    active={selection.kind === 'tag' && selection.name === tag}
+                    onClick={() => onSelect({ kind: 'tag', name: tag })}
+                  />
+                ))}
+                {filteredTags.length === 0 && (
+                  <div className="px-4 py-2 text-xs text-faint">No matches</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        <SidebarItem
+          label="Inbox"
+          count={counts.inbox}
+          active={selection.kind === 'inbox'}
+          onClick={() => onSelect({ kind: 'inbox' })}
+          badge={counts.inboxPending}
+          tooltip="Files shared directly with you by other ships"
+        />
+      </div>
+
+      <div className="border-t border-border">
+        <div className="h-12 flex items-center gap-2 px-4 border-b border-border">
+          <div className="w-7 h-7 rounded-md bg-canopy flex items-center justify-center text-white text-sm font-semibold">C</div>
+          <div className="font-medium leading-tight text-sm" title="Organize and share files in catalogs">Catalogs</div>
+        </div>
+
+        <div className="py-2">
+          <SidebarItem
+            label="My Catalogs"
+            count={totalFiles}
+            active={selection.kind === 'catalogs' || selection.kind === 'catalog'}
+            onClick={() => onSelect({ kind: 'catalogs' })}
+            tint="canopy"
+            tooltip="Your catalogs for organizing and sharing files"
+          />
+          {(selection.kind === 'catalogs' || selection.kind === 'catalog') && catalogCount > 0 && (
+            <div className="ml-2">
+              {Array.from(catalogs.entries()).map(([cid, cat]) => (
+                <button
+                  key={cid}
+                  onClick={() => onSelect({ kind: 'catalog', catalogId: cid })}
+                  className={`w-full px-4 py-1 flex items-center justify-between text-xs ${
+                    selection.kind === 'catalog' && selection.catalogId === cid
+                      ? 'text-canopy font-medium bg-canopy-soft'
+                      : 'text-ink hover:bg-bg'
+                  }`}
+                >
+                  <span className="truncate">{cat.name || cid}</span>
+                  <span className="text-[10px] text-faint">{cat.files.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <SidebarItem
+            label="Browse"
+            count={peerHosts.length}
+            active={selection.kind === 'browse' || selection.kind === 'browse-peer' || selection.kind === 'browse-catalog'}
+            onClick={() => onSelect({ kind: 'browse' })}
+            tint="canopy"
+            tooltip="Browse catalogs from other ships"
+          />
+          {(selection.kind === 'browse' || selection.kind === 'browse-peer' || selection.kind === 'browse-catalog') && peerHosts.length > 0 && (
+            <>
+              <SectionHeader
+                label={`Subscriptions (${peerHosts.length})`}
+                open={subsOpen}
+                onToggle={() => setSubsOpen(!subsOpen)}
+                small
+              />
+              {subsOpen && peerHosts.map((host) => {
+                const hostCatalogs = Array.from(catalogPeers.values()).filter((l) => l.host === host);
+                return (
+                  <div key={host}>
+                    <PeerItem
+                      ship={host}
+                      active={selection.kind === 'browse-peer' && selection.host === host}
+                      onClick={() => onSelect({ kind: 'browse-peer', host })}
+                      onUnsubscribe={() => {
+                        for (const c of hostCatalogs) {
+                          if (confirm(`Unsubscribe from ${c.name || c.catalogId} on ${host}?`)) {
+                            onUnsubscribeCatalog(host, c.catalogId);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          <SidebarItem
+            label="Discover"
+            count={Array.from(catalogPeers.values()).reduce((n, l) => n + l.entries.length, 0)}
+            active={selection.kind === 'discover'}
+            onClick={() => onSelect({ kind: 'discover' })}
+            tint="canopy"
+            tooltip="Explore files from across the network"
+          />
+        </div>
+      </div>
+    </>
+  );
+
+  if (isDrawer) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/30 z-40" onClick={onCloseDrawer} />
+        <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-surface flex flex-col shadow-xl">
+          <div className="h-14 flex items-center gap-2 px-4 border-b border-border">
+            <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-white text-sm font-semibold">G</div>
+            <div className="min-w-0 flex-1">
+              <div className="font-medium leading-tight">Grove</div>
+              <div className="text-[10px] text-faint font-mono truncate leading-tight">{shortShip(shipName)}</div>
+            </div>
+            <button onClick={onCloseDrawer} className="text-muted hover:text-ink text-lg">&times;</button>
+          </div>
+          <nav className="flex-1 overflow-y-auto">{navContent}</nav>
+        </aside>
+      </>
+    );
+  }
 
   return (
-    <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
+    <aside className="w-60 shrink-0 border-r border-border bg-surface hidden md:flex flex-col">
       <div className="h-14 flex items-center gap-2 px-4 border-b border-border">
         <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-white text-sm font-semibold">G</div>
         <div className="min-w-0 flex-1">
@@ -49,175 +249,7 @@ export default function Sidebar({
         </div>
         <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-faint'}`} title={connected ? 'connected' : 'connecting...'} />
       </div>
-
-      <nav className="flex-1 overflow-y-auto">
-        <div className="py-3">
-          <SidebarItem
-            label="All files"
-            count={counts.all}
-            active={selection.kind === 'all'}
-            onClick={() => onSelect({ kind: 'all' })}
-          />
-          <SidebarItem
-            label="Starred"
-            count={counts.starred}
-            active={selection.kind === 'starred'}
-            onClick={() => onSelect({ kind: 'starred' })}
-            muted
-          />
-
-          <SectionHeader
-            label="Views"
-            open={viewsOpen}
-            onToggle={() => setViewsOpen(!viewsOpen)}
-            onAdd={onNewView}
-            addTitle="New view"
-            tooltip="Filtered collections — files matching all selected tags"
-          />
-          {viewsOpen && (
-            <div className="mt-1">
-              {views.length === 0 && (
-                <div className="px-4 py-2 text-xs text-faint">No views yet</div>
-              )}
-              {views.map((v) => (
-                <ViewItem
-                  key={v.name}
-                  view={v}
-                  active={selection.kind === 'view' && selection.name === v.name}
-                  onClick={() => onSelect({ kind: 'view', name: v.name })}
-                  onEdit={() => onEditView(v)}
-                  onDelete={() => { if (confirm(`Delete view "${v.name}"?`)) onDeleteView(v); }}
-                  onDrop={(ids) => onDropOnView(v.name, ids)}
-                />
-              ))}
-            </div>
-          )}
-
-          <SectionHeader
-            label="Tags"
-            open={tagsOpen}
-            onToggle={() => setTagsOpen(!tagsOpen)}
-          />
-          {tagsOpen && (
-            <div className="mt-1">
-              {tagCounts.length === 0 ? (
-                <div className="px-4 py-2 text-xs text-faint">No tags yet</div>
-              ) : (
-                <>
-                  <div className="px-4 pb-1">
-                    <input
-                      value={tagFilter}
-                      onChange={(e) => setTagFilter(e.target.value)}
-                      placeholder="Search tags..."
-                      className="w-full text-xs border border-border rounded px-2 py-1"
-                    />
-                  </div>
-                  {filteredTags.map(([tag, count]) => (
-                    <SidebarItem
-                      key={tag}
-                      label={`#${tag}`}
-                      count={count}
-                      active={selection.kind === 'tag' && selection.name === tag}
-                      onClick={() => onSelect({ kind: 'tag', name: tag })}
-                    />
-                  ))}
-                  {filteredTags.length === 0 && (
-                    <div className="px-4 py-2 text-xs text-faint">No matches</div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {(() => {
-            const isSharedSection = selection.kind === 'inbox' || selection.kind === 'shared-views' || selection.kind === 'shared-view';
-            return (
-              <div className="mt-4">
-                <SidebarItem
-                  label="Shared with me"
-                  count={counts.inbox + svList.length}
-                  active={isSharedSection}
-                  onClick={() => onSelect({ kind: 'inbox' })}
-                  badge={counts.inboxPending + counts.newSharedViews}
-                  tooltip="Files and views that others have shared with you"
-                />
-                {isSharedSection && (
-                  <div>
-                    <ClickableSectionHeader
-                      label="All Files"
-                      count={counts.inbox}
-                      active={selection.kind === 'inbox'}
-                      onClick={() => onSelect({ kind: 'inbox' })}
-                      tooltip="Files shared directly with you by other ships"
-                    />
-                    <ClickableSectionHeader
-                      label="Shared Views"
-                      count={svList.length}
-                      active={selection.kind === 'shared-views' || selection.kind === 'shared-view'}
-                      onClick={() => onSelect({ kind: 'shared-views' })}
-                      badge={counts.newSharedViews}
-                      tooltip="Filtered collections shared with you by other ships"
-                    />
-                    {svList.length > 0 && svList.map((sv) => (
-                      <SharedViewSubItem
-                        key={`${sv.host}/${sv.name}`}
-                        listing={sv}
-                        active={selection.kind === 'shared-view' && selection.host === sv.host && selection.name === sv.name}
-                        onClick={() => onSelect({ kind: 'shared-view', host: sv.host, name: sv.name })}
-                        onUnsubscribe={() => {
-                          if (confirm(`Unsubscribe from ${sv.name} on ${sv.host}?`)) onUnsubscribeSharedView(sv.host, sv.name);
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        <div className="border-t border-border">
-          <div className="h-12 flex items-center gap-2 px-4 border-b border-border">
-            <div className="w-7 h-7 rounded-md bg-canopy flex items-center justify-center text-white text-sm font-semibold">C</div>
-            <div className="font-medium leading-tight text-sm" title="Your public file feed that others can browse and subscribe to">Canopy</div>
-          </div>
-
-          <div className="py-2">
-            <SidebarItem
-              label="My canopy"
-              count={counts.canopy}
-              active={selection.kind === 'canopy-mine'}
-              onClick={() => onSelect({ kind: 'canopy-mine' })}
-              tint="canopy"
-              onFileDrop={onDropOnCanopy}
-              tooltip="Files you've published for others to see"
-            />
-            <button
-              onClick={() => onSelect({ kind: 'canopy-browse' })}
-              className={`w-full px-4 py-1.5 flex items-center text-sm ${selection.kind === 'canopy-browse' ? 'bg-canopy-soft text-canopy font-medium' : 'text-ink hover:bg-bg'}`}
-            >
-              <span className="truncate">Browse</span>
-            </button>
-            {canopyPeers.length > 0 && (
-              <SectionHeader
-                label={`Subscriptions (${canopyPeers.length})`}
-                open={subsOpen}
-                onToggle={() => setSubsOpen(!subsOpen)}
-                small
-              />
-            )}
-            {subsOpen && canopyPeers.map((ship) => (
-              <PeerItem
-                key={ship}
-                ship={ship}
-                active={selection.kind === 'canopy-peer' && selection.ship === ship}
-                onClick={() => onSelect({ kind: 'canopy-peer', ship })}
-                onUnsubscribe={() => { if (confirm(`Unsubscribe from ${ship}?`)) onUnsubscribeCanopy(ship); }}
-              />
-            ))}
-          </div>
-        </div>
-      </nav>
+      <nav className="flex-1 overflow-y-auto">{navContent}</nav>
     </aside>
   );
 }
@@ -233,28 +265,6 @@ function SectionHeader({ label, open, onToggle, onAdd, addTitle, small, tooltip 
         <button className="text-muted hover:text-ink text-base leading-none" onClick={onAdd} title={addTitle}>+</button>
       )}
     </div>
-  );
-}
-
-function ClickableSectionHeader({ label, count, active, onClick, badge, tooltip }: {
-  label: string; count: number; active: boolean; onClick: () => void; badge?: number; tooltip?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={tooltip}
-      className={`w-full px-4 py-1 flex items-center justify-between text-xs uppercase tracking-wider ${
-        active ? 'text-accent font-medium' : 'text-muted hover:text-ink'
-      }`}
-    >
-      <span className="flex items-center gap-1.5">
-        {label}
-        {badge != null && badge > 0 && (
-          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-        )}
-      </span>
-      <span className="text-[10px] text-faint normal-case">{count}</span>
-    </button>
   );
 }
 
@@ -311,22 +321,7 @@ function PeerItem({ ship, active, onClick, onUnsubscribe }: { ship: string; acti
       <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
         <span className={`truncate font-mono text-xs ${active ? 'text-canopy font-medium' : 'text-ink'}`}>{shortShip(ship)}</span>
       </button>
-      <button className="hidden group-hover:block text-xs text-muted hover:text-red-600 px-1" onClick={onUnsubscribe} title="Unsubscribe">×</button>
-    </div>
-  );
-}
-
-function SharedViewSubItem({ listing, active, onClick, onUnsubscribe }: {
-  listing: GroveViewListing; active: boolean; onClick: () => void; onUnsubscribe: () => void;
-}) {
-  return (
-    <div className={`group flex items-center pr-2 ${active ? 'bg-accent-soft' : 'hover:bg-bg'}`}>
-      <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: listing.color }} />
-        <span className={`truncate text-xs ${active ? 'text-accent font-medium' : 'text-ink'}`}>{listing.name}</span>
-        <span className="text-[10px] text-faint font-mono shrink-0">{shortShip(listing.host)}</span>
-      </button>
-      <button className="hidden group-hover:block text-xs text-muted hover:text-red-600 px-1" onClick={onUnsubscribe} title="Unsubscribe">×</button>
+      <button className="md:hidden md:group-hover:block text-xs text-muted hover:text-red-600 px-1" onClick={onUnsubscribe} title="Unsubscribe">×</button>
     </div>
   );
 }
@@ -365,9 +360,8 @@ function ViewItem({ view, active, onClick, onEdit, onDelete, onDrop }: {
       <button onClick={onClick} className="flex-1 px-4 py-1.5 flex items-center gap-2 text-sm min-w-0">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: view.color }} />
         <span className={`truncate ${active ? 'text-accent font-medium' : 'text-ink'}`}>{view.name}</span>
-        {view.shared && <span className="text-[10px] text-muted shrink-0" title="Shared view">shared</span>}
       </button>
-      <div className="hidden group-hover:flex gap-1">
+      <div className="md:hidden md:group-hover:flex gap-1">
         <button className="text-xs text-muted hover:text-ink px-1" onClick={onEdit} title="Edit">✎</button>
         <button className="text-xs text-muted hover:text-red-600 px-1" onClick={onDelete} title="Delete">×</button>
       </div>

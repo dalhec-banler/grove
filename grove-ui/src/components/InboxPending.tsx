@@ -53,7 +53,7 @@ export function PendingCard({ entry, trusted, blocked, onAccept, onDecline, onTr
         <div className="text-xs text-muted font-mono truncate">{entry.owner}</div>
         <div className="text-xs text-faint">{formatBytes(entry.size)}</div>
       </div>
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+      <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:group-hover:opacity-100">
         {!blocked && (
           <button onClick={onAccept} className="text-xs px-1.5 py-0.5 rounded bg-accent text-white hover:opacity-90">Accept</button>
         )}

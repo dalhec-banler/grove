@@ -8,7 +8,7 @@ import FileList from './FileList';
 import type { FileMeta } from '../types';
 
 const files: FileMeta[] = [
-  { id: 'f1', name: 'photo.png', fileMark: 'png', size: 1024, tags: ['art'], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: true, allowed: [] },
+  { id: 'f1', name: 'photo.png', fileMark: 'png', size: 1024, tags: ['art'], created: '~2026.1.1', modified: '~2026.1.2', description: '', starred: true, allowed: [], inCatalogs: [] },
 ];
 
 describe('FileList', () => {

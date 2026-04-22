@@ -26,7 +26,7 @@ export default function ShareModal({ share, onClose }: Props) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-surface rounded-lg shadow-xl w-[480px] p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-lg shadow-xl w-[90vw] max-w-[480px] p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-medium mb-1">Share link</h2>
         <p className="text-xs text-muted mb-4">Anyone with this link can download <b>{share.name}</b>.</p>
         <div className="flex gap-2 mb-4">

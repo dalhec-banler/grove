@@ -28,6 +28,7 @@ describe('fileFromJson', () => {
     expect(result.description).toBe('');
     expect(result.starred).toBe(false);
     expect(result.allowed).toEqual([]);
+    expect(result.inCatalogs).toEqual([]);
   });
 });
 
@@ -114,5 +115,18 @@ describe('normalizeUpdate', () => {
   it('normalizes trustedUpdated update', () => {
     const result = normalizeUpdate({ type: 'trustedUpdated', trusted: ['~zod'], blocked: [] });
     expect(result).toEqual({ type: 'trustedUpdated', trusted: ['~zod'], blocked: [] });
+  });
+
+  it('normalizes catalogCreated update', () => {
+    const result = normalizeUpdate({
+      type: 'catalogCreated', catalogId: 'music',
+      config: { name: 'Music', description: '', mode: 'public', friends: [], files: [] },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('catalogCreated');
+    if (result!.type === 'catalogCreated') {
+      expect(result!.catalogId).toBe('music');
+      expect(result!.config.name).toBe('Music');
+    }
   });
 });
