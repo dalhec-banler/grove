@@ -1,15 +1,8 @@
-::
-::::  /hoon/webmanifest/mar
-  ::
-/?    310
-::::  compute
-  ::
-=,  eyre
 |_  jon=@t
-::
 ++  grow
   |%
-  ++  mime  [/application/json (as-octs:mimes:html jon)]
+  ++  mime  ^-  ^mime  [`(list @t)`~['application' 'manifest+json'] (as-octs:mimes:html jon)]
+  ++  noun  jon
   --
 ++  grab
   |%

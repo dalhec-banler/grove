@@ -4,14 +4,7 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/apps/grove/grove-sw.js', { scope: '/apps/grove/' })
-    .then(reg => {
-      console.log('[grove-pwa] SW registered, scope:', reg.scope);
-      setInterval(() => reg.update(), 60_000);
-    })
-    .catch(err => console.error('[grove-pwa] SW failed:', err));
-}
+// SW registration is handled by vite-plugin-pwa via registerSW.js
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
