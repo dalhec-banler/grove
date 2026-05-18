@@ -30,7 +30,6 @@ import BrowseView from './components/BrowseView';
 import BrowsePeerView from './components/BrowsePeerView';
 import BrowseCatalogView from './components/BrowseCatalogView';
 import DiscoverView from './components/DiscoverView';
-import InstallBanner from './components/InstallBanner';
 
 import { IMAGE_MARKS } from './format';
 import { fileUrl } from './urls';
@@ -301,8 +300,6 @@ export default function App() {
         {loadError && (
           <div className="bg-red-600 text-white text-sm px-4 py-2 text-center">{loadError}</div>
         )}
-        <InstallBanner />
-
         <header className="h-14 border-b border-border flex items-center px-3 md:px-6 gap-2 md:gap-4 bg-surface">
           <button onClick={() => setDrawerOpen(true)} className="text-muted hover:text-ink md:hidden shrink-0 p-1">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
