@@ -8,9 +8,12 @@ import { useUpload } from './useUpload';
 import { useToolbarState } from './useToolbarState';
 import { useInboxActions, useCatalogActions } from './useActions';
 import { useIsMobile } from './useIsMobile';
+import { usePullToRefresh } from './hooks/usePullToRefresh';
+import { updateBadge, markSeen } from './badge';
 import Sidebar from './components/Sidebar';
 import FileList from './components/FileList';
 import FileGrid from './components/FileGrid';
+import { SkeletonFileGrid, SkeletonFileList } from './components/SkeletonGrid';
 import UploadZone from './components/UploadZone';
 import ViewModal from './components/ViewModal';
 import ShareModal from './components/ShareModal';
@@ -42,12 +45,28 @@ export default function App() {
     files, setFiles, views, shares, inbox, trusted, blocked,
     catalogs, catalogPeers, catalogSubs, availableGroups,
     connected, loadError, setPendingShareFor, shareDialog, setShareDialog,
+    refreshAll,
   } = useGroveData(isUploadingRef, uploadCollectedRef);
+
+  // Pull-to-refresh on mobile
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const { pullDistance, isRefreshing } = usePullToRefresh(mainScrollRef, refreshAll);
+
+  // PWA badge — show unread inbox count on app icon
+  const unreadInbox = useMemo(
+    () => Array.from(inbox.values()).filter((e) => !e.accepted).length,
+    [inbox],
+  );
+  useEffect(() => { updateBadge(unreadInbox); }, [unreadInbox]);
 
   const upload = useUpload(setFiles, isUploadingRef, uploadCollectedRef);
 
   const [selection, setSelectionRaw] = useState<Selection>({ kind: 'all' });
-  const setSelection = useCallback((s: Selection) => { setSelectionRaw(s); setDrawerOpen(false); }, []);
+  const setSelection = useCallback((s: Selection) => {
+    setSelectionRaw(s);
+    setDrawerOpen(false);
+    if (s.kind === 'inbox') markSeen();
+  }, []);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -276,7 +295,7 @@ export default function App() {
       all: files.size,
       starred: Array.from(files.values()).filter((f) => f.starred).length,
       inbox: inbox.size,
-      inboxPending: Array.from(inbox.values()).filter((e) => !e.accepted).length,
+      inboxPending: unreadInbox,
     },
     connected,
     shipName: window.ship ?? '',
@@ -296,7 +315,17 @@ export default function App() {
         />
       )}
       <Sidebar {...sidebarProps} />
-      <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
+      <main ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
+        {pullDistance > 0 && (
+          <div
+            className="flex items-center justify-center text-muted text-xs overflow-hidden transition-[height] duration-150"
+            style={{ height: pullDistance }}
+          >
+            {isRefreshing ? (
+              <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83" /></svg>
+            ) : pullDistance >= 64 ? '↑ Release to refresh' : '↓ Pull to refresh'}
+          </div>
+        )}
         {loadError && (
           <div className="bg-red-600 text-white text-sm px-4 py-2 text-center">{loadError}</div>
         )}
@@ -407,6 +436,8 @@ export default function App() {
                 onPlant={catalogActions.plantEntry}
                 onDropCache={catalogActions.dropCache}
               />
+            ) : !connected && files.size === 0 ? (
+              fileToolbar.viewMode === 'list' ? <SkeletonFileList /> : <SkeletonFileGrid />
             ) : fileToolbar.viewMode === 'list' ? (
               <FileList
                 files={visibleFiles}
@@ -539,7 +570,7 @@ export default function App() {
         selection={selection}
         onSelect={setSelection}
         onOpenDrawer={() => setDrawerOpen(true)}
-        inboxBadge={Array.from(inbox.values()).filter((e) => !e.accepted).length}
+        inboxBadge={unreadInbox}
       />
       {confirmState && (
         <ConfirmDialog

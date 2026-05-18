@@ -8,6 +8,7 @@ import {
   scryCatalogs, scryCatalogPeers, scryCatalogSubs, scryGroups,
   subscribeUpdates,
 } from './api';
+import { putCache, getCache, CACHE_SCHEMA_VERSION } from './idb';
 
 function mapSet<K, V>(map: Map<K, V>, key: K, value: V): Map<K, V> {
   return new Map(map).set(key, value);
@@ -57,6 +58,19 @@ export function useGroveData(
     setAvailableGroups(groupList);
     setConnected(true);
     setLoadError(null);
+    putCache('grove-state', {
+      v: CACHE_SCHEMA_VERSION,
+      files: fileList,
+      views: viewList,
+      shares: shareList,
+      inbox: inboxList,
+      trusted: trustData.trusted,
+      blocked: trustData.blocked,
+      catalogs: catalogList.map((c) => [c.catalogId, c.config]),
+      catalogPeers: peerList.map((l) => [`${l.host}/${l.catalogId}`, l]),
+      catalogSubs: subList,
+      groups: groupList,
+    }).catch(() => {});
   }, []);
 
   const handleUpdate = useCallback((u: Update) => {
@@ -193,6 +207,20 @@ export function useGroveData(
   }, [isUploadingRef, uploadCollectedRef]);
 
   useEffect(() => {
+    getCache<any>('grove-state').then((cached) => {
+      if (cached && cached.v === CACHE_SCHEMA_VERSION && cached.files) {
+        setFiles(new Map(cached.files.map((m: FileMeta) => [m.id, m])));
+        setViews(new Map(cached.views.map((w: View) => [w.name, w])));
+        setShares(new Map(cached.shares.map((sh: Share) => [sh.token, sh])));
+        setInbox(new Map(cached.inbox.map((e: InboxEntry) => [`${e.owner}/${e.fileId}`, e])));
+        setTrusted(new Set(cached.trusted));
+        setBlocked(new Set(cached.blocked));
+        setCatalogs(new Map(cached.catalogs));
+        setCatalogPeers(new Map(cached.catalogPeers));
+        setCatalogSubs(cached.catalogSubs ?? []);
+        setAvailableGroups(cached.groups ?? []);
+      }
+    }).catch(() => {});
     refreshAll().catch((e) => { console.error('initial load failed', e); setLoadError('Failed to connect to Grove'); });
   }, [refreshAll]);
 
@@ -208,5 +236,6 @@ export function useGroveData(
     files, setFiles, views, shares, inbox, trusted, blocked,
     catalogs, catalogPeers, catalogSubs, availableGroups,
     connected, loadError, pendingShareFor, setPendingShareFor, shareDialog, setShareDialog,
+    refreshAll,
   };
 }

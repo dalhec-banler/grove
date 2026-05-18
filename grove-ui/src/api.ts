@@ -214,7 +214,33 @@ function parseGroupFlag(o: unknown): GroupFlag | null {
   return { host: gf.host, name: gf.name ?? '' };
 }
 
-export function poke(action: GroveAction): Promise<void> {
+// -- Poke queue with retry + exponential backoff + offline detection --
+
+const MAX_RETRIES = 3;
+const BASE_DELAY = 1000;
+const MAX_DELAY = 30000;
+const MAX_QUEUE_SIZE = 100;
+
+interface QueueItem {
+  action: GroveAction;
+  attempt: number;
+  resolve: () => void;
+  reject: (e: Error) => void;
+}
+
+const _pokeQueue: QueueItem[] = [];
+let _processing = false;
+let _online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    _online = true;
+    _processPokeQueue();
+  });
+  window.addEventListener('offline', () => { _online = false; });
+}
+
+function _rawPoke(action: GroveAction): Promise<void> {
   return new Promise((resolve, reject) => {
     getApi().poke({
       app: 'grove',
@@ -223,6 +249,40 @@ export function poke(action: GroveAction): Promise<void> {
       onSuccess: () => resolve(),
       onError: (err) => reject(new Error(typeof err === 'string' ? err : JSON.stringify(err))),
     });
+  });
+}
+
+async function _processPokeQueue(): Promise<void> {
+  if (_processing || _pokeQueue.length === 0) return;
+  _processing = true;
+  while (_pokeQueue.length > 0) {
+    if (!_online) { _processing = false; return; }
+    const item = _pokeQueue[0];
+    try {
+      await _rawPoke(item.action);
+      _pokeQueue.shift();
+      item.resolve();
+    } catch (e) {
+      item.attempt++;
+      if (item.attempt >= MAX_RETRIES) {
+        _pokeQueue.shift();
+        item.reject(e as Error);
+      } else {
+        const delay = Math.min(BASE_DELAY * Math.pow(2, item.attempt - 1), MAX_DELAY);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  _processing = false;
+}
+
+export function poke(action: GroveAction): Promise<void> {
+  if (_pokeQueue.length >= MAX_QUEUE_SIZE) {
+    return Promise.reject(new Error('Poke queue full — too many pending actions'));
+  }
+  return new Promise((resolve, reject) => {
+    _pokeQueue.push({ action, attempt: 0, resolve, reject });
+    _processPokeQueue();
   });
 }
 
