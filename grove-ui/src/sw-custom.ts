@@ -2,8 +2,7 @@
 import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute, NavigationRoute, setDefaultHandler } from 'workbox-routing';
-import { NetworkOnly, NetworkFirst } from 'workbox-strategies';
-import { BackgroundSyncPlugin } from 'workbox-background-sync';
+import { NetworkOnly } from 'workbox-strategies';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -31,19 +30,25 @@ registerRoute(
   }),
 );
 
-// Background sync — queue failed channel PUT requests for retry when online
-const pokeSync = new BackgroundSyncPlugin('grove-poke-queue', {
-  maxRetentionTime: 24 * 60, // retain for 24 hours
-});
+// The live Urbit channel (SSE + poke PUTs) and all scries must never be
+// cached — caching the never-ending text/event-stream stalls the fetch and
+// severs live updates (breaking upload completion). NetworkOnly passes both
+// GET and PUT straight through. No BackgroundSync here: uploads are not
+// idempotent, so blindly replaying failed channel PUTs would duplicate files.
+registerRoute(({ url }) => url.pathname.startsWith('/~/'), new NetworkOnly());
 
+// Blob downloads are large and one-shot — caching them bloats the runtime
+// cache and evicts the precache (QuotaExceededError). Always go to network.
 registerRoute(
-  ({ url }) => url.pathname.includes('/~/channel/'),
-  new NetworkOnly({ plugins: [pokeSync] }),
-  'PUT',
+  ({ url }) =>
+    url.pathname.startsWith('/grove-file/') ||
+    url.pathname.startsWith('/grove-remote-file/') ||
+    url.pathname.startsWith('/grove-share/'),
+  new NetworkOnly(),
 );
 
-// Default handler — ensures ALL fetch events get a respondWith() call,
-// which Chrome requires for beforeinstallprompt to fire. Workbox routes
-// above handle precached assets, navigation, and channel PUTs; this
-// catches everything else with a network-first pass-through.
-setDefaultHandler(new NetworkFirst());
+// Default handler — ensures ALL fetch events get a respondWith() call, which
+// Chrome requires for beforeinstallprompt to fire. Workbox routes above handle
+// precached assets, navigation, the channel, and blobs; this catches
+// everything else with a network-only pass-through (no caching).
+setDefaultHandler(new NetworkOnly());
