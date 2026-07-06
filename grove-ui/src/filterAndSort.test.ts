@@ -133,6 +133,18 @@ describe('filterAndSortFiles', () => {
       const result = filterAndSortFiles(files, emptyViews, { kind: 'all' }, '', 'type');
       expect(result.map((f) => f.id)).toEqual(['c', 'b', 'a']);
     });
+
+    // Locks H8 with @da modified dates spanning 1- and 2-digit day/month.
+    it('sorts @da modified dates numerically across 1- and 2-digit day/month', () => {
+      const d9 = mkFile({ id: 'd9', modified: '~2026.4.9..00.00.00' });
+      const d15 = mkFile({ id: 'd15', modified: '~2026.4.15..00.00.00' });
+      const m12 = mkFile({ id: 'm12', modified: '~2026.12.1..00.00.00' });
+      const map = toMap([d9, d15, m12]);
+      expect(filterAndSortFiles(map, emptyViews, { kind: 'all' }, '', 'newest').map((f) => f.id))
+        .toEqual(['m12', 'd15', 'd9']);
+      expect(filterAndSortFiles(map, emptyViews, { kind: 'all' }, '', 'oldest').map((f) => f.id))
+        .toEqual(['d9', 'd15', 'm12']);
+    });
   });
 
   it('combines selection, search, and sort', () => {

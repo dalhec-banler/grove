@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { CatalogConfig, CatalogMode, FileMeta, GroupInfo, GroupFlag, ViewMode } from '../types';
-import { formatBytes } from '../format';
+import { formatBytes, dateSortKey } from '../format';
 import { fileUrl } from '../urls';
 import { GRID_STYLE } from '../styles';
 import Thumb from './Thumb';
@@ -36,7 +36,7 @@ export default function CatalogDetailView({
       .map((fid) => allFiles.get(fid))
       .filter((f): f is FileMeta => !!f)
       .filter((f) => !q || f.name.toLowerCase().includes(q) || f.tags.some((t) => t.toLowerCase().includes(q)))
-      .sort((a, b) => b.modified.localeCompare(a.modified));
+      .sort((a, b) => dateSortKey(b.modified) - dateSortKey(a.modified));
   }, [config.files, allFiles, search]);
 
   function saveName() {
