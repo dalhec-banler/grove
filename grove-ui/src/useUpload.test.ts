@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { waitForUploadEvents, useUpload } from './useUpload';
+import { waitForUploadEvents, useUpload, uvFileId } from './useUpload';
 
 vi.mock('./api', () => ({
   poke: vi.fn(() => Promise.resolve()),
@@ -75,5 +75,29 @@ describe('useUpload', () => {
     expect(notifyError).toHaveBeenCalledWith(expect.stringContaining('Upload failed'));
     expect(result.current.busy).toBe(false);
     expect(args.isUploadingRef.current).toBe(false);
+  });
+
+  it('sends a stable @uv id in the upload action (idempotency)', async () => {
+    const { poke } = await import('./api');
+    (poke as ReturnType<typeof vi.fn>).mockClear();
+    (poke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const args = makeHookArgs();
+    const { result } = renderHook(() => useUpload(args.setFiles, args.isUploadingRef, args.uploadCollectedRef));
+    const file = new File(['data'], 'test.png', { type: 'image/png' });
+    await act(() => result.current.upload([file]));
+    const action = (poke as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(action.upload.id).toBe(uvFileId(file));
+    expect(action.upload.id).toMatch(/^0v[0-9a-v]+(\.[0-9a-v]{1,5})*$/);
+  });
+});
+
+describe('uvFileId', () => {
+  it('is a canonical, deterministic @uv literal', () => {
+    const a = new File(['x'], 'a.png', { type: 'image/png', lastModified: 1000 });
+    const a2 = new File(['x'], 'a.png', { type: 'image/png', lastModified: 1000 });
+    const b = new File(['x'], 'b.png', { type: 'image/png', lastModified: 1000 });
+    expect(uvFileId(a)).toMatch(/^0v[0-9a-v]+(\.[0-9a-v]{1,5})*$/);
+    expect(uvFileId(a)).toBe(uvFileId(a2)); // same identity → same id
+    expect(uvFileId(a)).not.toBe(uvFileId(b)); // different name → different id
   });
 });
