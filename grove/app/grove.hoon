@@ -327,7 +327,12 @@
     ^-  (quip card _state)
     ?-  -.a
         %upload
-      =/  i=file-id  (sham [eny.bowl now.bowl name.a])
+      ::  accept an optional client-supplied id for idempotent retries
+      =/  i=file-id
+        ?~  id.a  (sham [eny.bowl now.bowl name.a])
+        u.id.a
+      ::  if a client-supplied id already exists, this is a retry: no-op
+      ?:  &(?=(^ id.a) (~(has by f) i))  `state
       =/  fm=file-meta
         :*  i  name.a  file-mark.a  p.data.a
             tags.a  now.bowl  now.bowl  ''  |
@@ -338,6 +343,12 @@
     ::
         %delete
       ?.  (~(has by f) id.a)  `state
+      ::  collect catalogs that currently contain this file (from OLD state)
+      ::  before removal, so we can notify their peer-subscribers
+      =/  affected-cids=(list catalog-id)
+        %+  murn  ~(tap by catalogs)
+        |=  [cid=catalog-id cat=catalog-config]
+        ?:((~(has in files.cat) id.a) `cid ~)
       ::  remove from all catalogs
       =/  new-cats=(map catalog-id catalog-config)
         %-  ~(run by catalogs)
@@ -351,9 +362,11 @@
           catalogs  new-cats
           pub  new-pub
         ==
-      ::  broadcast updated catalogs that contained this file
+      ::  broadcast the (now file-less) listing for each affected catalog
       =/  broadcast-cards=(list card)
-        (catalog-broadcast-for-file id.a new-state)
+        %-  zing
+        %+  turn  affected-cids
+        |=(cid=catalog-id (catalog-broadcast cid new-state))
       :-  (weld (fact-update [%file-removed id.a]) broadcast-cards)
       new-state
     ::
@@ -361,6 +374,16 @@
       ?.  (~(has by f) id.a)  `state
       =/  o  (~(got by f) id.a)
       =/  new-fm  o(name name.a, modified now.bowl)
+      =/  new-f  (~(put by f) id.a new-fm)
+      =/  new-state  state(f new-f)
+      =/  broadcast-cards  (catalog-broadcast-for-file id.a new-state)
+      :-  (weld (fact-update [%file-updated new-fm]) broadcast-cards)
+      new-state
+    ::
+        %set-description
+      ?.  (~(has by f) id.a)  `state
+      =/  o  (~(got by f) id.a)
+      =/  new-fm  o(description description.a, modified now.bowl)
       =/  new-f  (~(put by f) id.a new-fm)
       =/  new-state  state(f new-f)
       =/  broadcast-cards  (catalog-broadcast-for-file id.a new-state)
@@ -563,7 +586,12 @@
       ?~  cat  `state
       =/  new-cat  u.cat(mode mode.a, modified now.bowl)
       =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
-      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
+      ::  narrowing access can strand subscribers who are no longer allowed
+      :-  ;:  weld
+            (fact-update [%catalog-updated id.a new-cat])
+            (catalog-broadcast id.a new-state)
+            (narrow-kicks id.a new-cat)
+          ==
       new-state
     ::
         %set-catalog-group
@@ -571,22 +599,33 @@
       ?~  cat  `state
       =/  new-cat  u.cat(group-flag flag.a, modified now.bowl)
       =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
-      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
+      :-  ;:  weld
+            (fact-update [%catalog-updated id.a new-cat])
+            (catalog-broadcast id.a new-state)
+            (narrow-kicks id.a new-cat)
+          ==
       new-state
     ::
         %add-catalog-friend
       =/  cat  (~(get by catalogs) id.a)
       ?~  cat  `state
       =/  new-cat  u.cat(friends (~(put in friends.u.cat) who.a))
-      :-  (fact-update [%catalog-updated id.a new-cat])
-      state(catalogs (~(put by catalogs) id.a new-cat))
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      ::  broadcast so open subscribers refresh (widening access, no kicks)
+      :-  (weld (fact-update [%catalog-updated id.a new-cat]) (catalog-broadcast id.a new-state))
+      new-state
     ::
         %remove-catalog-friend
       =/  cat  (~(get by catalogs) id.a)
       ?~  cat  `state
       =/  new-cat  u.cat(friends (~(del in friends.u.cat) who.a))
-      :-  (fact-update [%catalog-updated id.a new-cat])
-      state(catalogs (~(put by catalogs) id.a new-cat))
+      =/  new-state  state(catalogs (~(put by catalogs) id.a new-cat))
+      :-  ;:  weld
+            (fact-update [%catalog-updated id.a new-cat])
+            (catalog-broadcast id.a new-state)
+            (narrow-kicks id.a new-cat)
+          ==
+      new-state
     ::
         %add-to-catalog
       =/  cat  (~(get by catalogs) id.a)
@@ -735,6 +774,18 @@
     |=  [cid=catalog-id cat=catalog-config]
     ?.  (~(has in files.cat) fid)  ~
     (catalog-broadcast cid st)
+  ::
+  ::  kick current /catalog/<cid> subscribers who are no longer authorized
+  ::  under the given (narrowed) config
+  ++  narrow-kicks
+    |=  [cid=catalog-id cat=catalog-config]
+    ^-  (list card)
+    =/  want=path  /catalog/(scot %tas cid)
+    %+  murn  ~(tap by sup.bowl)
+    |=  [=duct who=@p pth=path]
+    ?.  =(pth want)  ~
+    ?:  (catalog-access-ok who cat)  ~
+    `[%give %kick ~[want] `who]
   ::
   ++  update-json
     |=  u=update
@@ -1015,7 +1066,7 @@
         :_  this
         (http-reply hp 404 'text/plain' (as-octs:mimes:html 'not cached'))
       :_  this
-      (http-reply hp 200 (content-type file-mark.-.u.c) +.u.c)
+      (blob-reply hp req (content-type file-mark.-.u.c) name.-.u.c +.u.c)
     ?:  =((scag 12 u) "/grove-file/")
       ?.  authenticated.req
         :_  this
@@ -1034,7 +1085,7 @@
         :_  this
         (http-reply hp 404 'text/plain' (as-octs:mimes:html 'blob missing'))
       :_  this
-      (http-reply hp 200 (content-type file-mark.u.fm) u.blob)
+      (blob-reply hp req (content-type file-mark.u.fm) name.u.fm u.blob)
     ?.  =((scag 13 u) "/grove-share/")
       :_  this
       (http-reply hp 200 'text/html' (as-octs:mimes:html landing-page))
@@ -1058,7 +1109,7 @@
       :_  this
       (http-reply hp 404 'text/plain' (as-octs:mimes:html 'blob missing'))
     :_  this
-    (http-reply hp 200 (content-type file-mark.u.fm) u.blob)
+    (blob-reply hp req (content-type file-mark.u.fm) name.u.fm u.blob)
   ::
   ++  http-reply
     |=  [hp=(list path) status=@ud ctype=@t body=octs]
@@ -1066,6 +1117,97 @@
     :~  [%give %fact hp %http-response-header !>(`response-header:http`[status ~[['content-type' ctype]]])]
         [%give %fact hp %http-response-data !>(`(unit octs)`(some body))]
         [%give %kick hp ~]
+    ==
+  ::
+  ::  serve a file blob, honoring a `Range: bytes=start-end` request header
+  ::  with a 206 partial response; otherwise a full 200 with `Accept-Ranges`.
+  ::  sets an inline content-disposition with the stored filename.
+  ++  blob-reply
+    |=  [hp=(list path) req=inbound-request:eyre ctype=@t name=@t body=octs]
+    ^-  (list card)
+    =/  cd=@t  (crip ;:(weld "inline; filename=\"" (trip name) "\""))
+    =/  rng  (get-header 'range' header-list.request.req)
+    ?~  rng  (full-reply hp ctype cd body)
+    =/  pr  (parse-range u.rng p.body)
+    ?~  pr  (full-reply hp ctype cd body)
+    =/  st   start.u.pr
+    =/  en   end.u.pr
+    =/  len  +((sub en st))
+    =/  sliced=octs  [len (cut 3 [st len] q.body)]
+    =/  cr=@t
+      %-  crip
+      ;:  weld
+        "bytes "  (num-tape st)  "-"  (num-tape en)  "/"  (num-tape p.body)
+      ==
+    =/  hdrs=(list [@t @t])
+      :~  ['content-type' ctype]
+          ['accept-ranges' 'bytes']
+          ['content-range' cr]
+          ['content-disposition' cd]
+      ==
+    :~  [%give %fact hp %http-response-header !>(`response-header:http`[206 hdrs])]
+        [%give %fact hp %http-response-data !>(`(unit octs)`(some sliced))]
+        [%give %kick hp ~]
+    ==
+  ::
+  ++  full-reply
+    |=  [hp=(list path) ctype=@t cd=@t body=octs]
+    ^-  (list card)
+    =/  hdrs=(list [@t @t])
+      :~  ['content-type' ctype]
+          ['accept-ranges' 'bytes']
+          ['content-disposition' cd]
+      ==
+    :~  [%give %fact hp %http-response-header !>(`response-header:http`[200 hdrs])]
+        [%give %fact hp %http-response-data !>(`(unit octs)`(some body))]
+        [%give %kick hp ~]
+    ==
+  ::
+  ++  get-header
+    |=  [key=@t hs=(list [k=@t v=@t])]
+    ^-  (unit @t)
+    ?~  hs  ~
+    ?:  =((cass (trip key)) (cass (trip k.i.hs)))  `v.i.hs
+    $(hs t.hs)
+  ::
+  ::  parse a single `bytes=start-end` range against a known total length.
+  ::  supports open-ended forms (`bytes=start-`, `bytes=-`); clamps end to
+  ::  the last byte; returns ~ on any malformed/unsatisfiable input.
+  ++  parse-range
+    |=  [rng=@t total=@ud]
+    ^-  (unit [start=@ud end=@ud])
+    ?:  =(0 total)  ~
+    =/  s  (trip rng)
+    ?.  =((scag 6 s) "bytes=")  ~
+    =/  spec  (slag 6 s)
+    =/  dash  (find "-" spec)
+    ?~  dash  ~
+    =/  start-str  (scag u.dash spec)
+    =/  end-str    (slag +(u.dash) spec)
+    =/  mstart=(unit @ud)
+      ?:  =(~ start-str)  `0
+      (rush (crip start-str) dem)
+    =/  mend=(unit @ud)
+      ?:  =(~ end-str)  `(dec total)
+      (rush (crip end-str) dem)
+    ?~  mstart  ~
+    ?~  mend  ~
+    =/  st  u.mstart
+    =/  en  (min (dec total) u.mend)
+    ?:  (gth st en)  ~
+    `[start=st end=en]
+  ::
+  ::  render a @ud as a plain (undotted) decimal tape for HTTP headers
+  ++  num-tape
+    |=  n=@ud
+    ^-  tape
+    ?:  =(0 n)  "0"
+    =|  acc=tape
+    |-  ^-  tape
+    ?:  =(0 n)  acc
+    %=  $
+      n    (div n 10)
+      acc  [(add '0' (mod n 10)) acc]
     ==
   ::
   ++  content-type
@@ -1078,13 +1220,30 @@
       %gif   'image/gif'
       %webp  'image/webp'
       %svg   'image/svg+xml'
+      %avif  'image/avif'
+      %bmp   'image/bmp'
+      %tiff  'image/tiff'
       %txt   'text/plain'
       %md    'text/markdown'
       %html  'text/html'
+      %css   'text/css'
+      %js    'text/javascript'
+      %csv   'text/csv'
+      %xml   'application/xml'
       %pdf   'application/pdf'
       %json  'application/json'
+      %zip   'application/zip'
       %mp4   'video/mp4'
+      %webm  'video/webm'
+      %mov   'video/quicktime'
+      %mkv   'video/x-matroska'
+      %avi   'video/x-msvideo'
       %mp3   'audio/mpeg'
+      %wav   'audio/wav'
+      %ogg   'audio/ogg'
+      %flac  'audio/flac'
+      %m4a   'audio/mp4'
+      %aac   'audio/aac'
     ==
   ::
   ++  landing-page
@@ -1390,7 +1549,7 @@
   |^
   ?+  path  (on-watch:def path)
     [%http-response *]  `this
-    [%updates ~]        `this
+    [%updates ~]        ?>(=(our.bowl src.bowl) `this)
   ::
       [%file @ ~]
     =/  fid=file-id  (slav %uv i.t.path)
@@ -1531,14 +1690,13 @@
       [%give %fact ~[/updates] %json !>(j)]~
     ::
         %kick
-      =/  j=json
-        %-  pairs:enjs:format
-        :~  type+s+'catalogPeerRemoved'
-            host+s+(scot %p who)
-            ['catalogId' s+(crip (trip cid))]
-        ==
-      :_  this(cat-subs (~(del by cat-subs) k), cat-peers (~(del by cat-peers) k))
-      [%give %fact ~[/updates] %json !>(j)]~
+      ::  transient kick: if the sub is still desired, re-watch instead of
+      ::  tearing down (a kick alone must not permanently kill a peer view)
+      ?.  (~(has by cat-subs) k)  `this
+      =/  wire=path  /cat-sub/(scot %p who)/(scot %tas cid)
+      :_  this
+      :~  [%pass wire %agent [who %grove] %watch /catalog/(scot %tas cid)]
+      ==
     ::
         %fact
       ?.  =(p.cage.sign %grove-catalog-listing)
