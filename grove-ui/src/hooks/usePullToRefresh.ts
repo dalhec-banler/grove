@@ -2,10 +2,17 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 
 const THRESHOLD = 64;
 const MAX_PULL = 120;
+const INDICATOR_H = 72;
 const MOBILE_MAX_WIDTH = 768;
 
 interface PullToRefreshResult {
-  pullDistance: number;
+  // Attach to the indicator container; the hook drives it imperatively via
+  // `transform` (compositor-only) so pull visuals never re-render React or
+  // animate height — per the repo scroll rule.
+  indicatorRef: React.RefObject<HTMLDivElement>;
+  // Attach to the "pull / release" label span; text is updated imperatively.
+  labelRef: React.RefObject<HTMLSpanElement>;
+  // The one and only React state transition.
   isRefreshing: boolean;
 }
 
@@ -13,13 +20,21 @@ export function usePullToRefresh(
   scrollRef: React.RefObject<HTMLElement | null>,
   onRefresh: () => Promise<void>,
 ): PullToRefreshResult {
-  const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
   const startY = useRef(0);
   const pulling = useRef(false);
   const pullRef = useRef(0);
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
+
+  // Reveal is a translateY on a container that sits hidden above the fold
+  // (negative margin). No layout, no state — just a transform.
+  const reveal = useCallback((px: number) => {
+    const el = indicatorRef.current;
+    if (el) el.style.transform = `translateY(${Math.min(px, INDICATOR_H)}px)`;
+  }, []);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     if (window.innerWidth >= MOBILE_MAX_WIDTH) return;
@@ -35,16 +50,18 @@ export function usePullToRefresh(
     if (!el || el.scrollTop > 0) {
       pulling.current = false;
       pullRef.current = 0;
-      setPullDistance(0);
+      reveal(0);
       return;
     }
     const dy = e.touches[0].clientY - startY.current;
     if (dy > 0) {
       const dampened = Math.min(dy * 0.4, MAX_PULL);
       pullRef.current = dampened;
-      setPullDistance(dampened);
+      reveal(dampened);
+      const label = labelRef.current;
+      if (label) label.textContent = dampened >= THRESHOLD ? '↑ Release to refresh' : '↓ Pull to refresh';
     }
-  }, [scrollRef]);
+  }, [scrollRef, reveal]);
 
   const handleTouchEnd = useCallback(async () => {
     if (!pulling.current) return;
@@ -53,17 +70,17 @@ export function usePullToRefresh(
     pullRef.current = 0;
     if (dist >= THRESHOLD) {
       setIsRefreshing(true);
-      setPullDistance(THRESHOLD);
+      reveal(INDICATOR_H);
       try {
         await onRefreshRef.current();
       } finally {
         setIsRefreshing(false);
-        setPullDistance(0);
+        reveal(0);
       }
     } else {
-      setPullDistance(0);
+      reveal(0);
     }
-  }, []);
+  }, [reveal]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -78,5 +95,5 @@ export function usePullToRefresh(
     };
   }, [scrollRef, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
-  return { pullDistance, isRefreshing };
+  return { indicatorRef, labelRef, isRefreshing };
 }
