@@ -36,9 +36,10 @@
       (cu |=(t=@t `@tas`(crip (trip t))) so)
     ++  parse-action
       %-  of
-      :~  upload+(ot ~[name+so file-mark+parse-tag data+parse-octs tags+parse-tags])
+      :~  upload+(ot ~[id+(mu parse-id) name+so file-mark+parse-tag data+parse-octs tags+parse-tags])
           delete+(ot ~[id+parse-id])
           rename+(ot ~[id+parse-id name+so])
+          set-description+(ot ~[id+parse-id description+so])
           toggle-star+(ot ~[id+parse-id])
           add-tags+(ot ~[id+parse-id tags+parse-tags])
           remove-tags+(ot ~[id+parse-id tags+parse-tags])
