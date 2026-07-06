@@ -18,8 +18,21 @@
         ?.split('=')[0]
         ?.replace('urbauth-', '') || '';
     </script>
-    <script type="module" crossorigin src="/apps/grove/assets/index.js"></script>
-    <link rel="stylesheet" crossorigin href="/apps/grove/assets/index.css">
+    <script>
+      // Capture beforeinstallprompt as early as possible — Chrome fires it
+      // before React mounts, so InstallBanner (which reads window.__pwaPrompt)
+      // would otherwise never see it and the Install button never appears (H7).
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__pwaPrompt = null;
+      });
+    </script>
+    <script type="module" crossorigin src="/apps/grove/assets/index.D_rRP6r1.js"></script>
+    <link rel="stylesheet" crossorigin href="/apps/grove/assets/index.Cvc9ou1u.css">
   <link rel="manifest" href="/apps/grove/manifest.webmanifest"><script id="vite-plugin-pwa:inline-sw">if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/apps/grove/sw-custom.js', { scope: '/apps/grove/' })})}</script></head>
   <body>
     <div id="root"></div>
