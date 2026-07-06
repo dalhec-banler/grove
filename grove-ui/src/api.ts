@@ -298,44 +298,83 @@ export interface SubscriptionHandle {
   cancel: () => void;
 }
 
+const SUB_BASE_DELAY = 1000;
+const SUB_MAX_DELAY = 30000;
+
 export function subscribeUpdates(
   onEvent: (u: Update) => void,
   opts?: { onQuit?: () => void; onError?: (e: unknown) => void },
 ): SubscriptionHandle {
   let cancelled = false;
   let latestSubId: number | undefined;
+  // Exponential backoff (1s→30s, jittered), reset on every successful
+  // (re)subscribe. A single pending timer prevents err+quit firing twice.
+  let backoff = SUB_BASE_DELAY;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleReconnect = () => {
+    if (cancelled || reconnectTimer !== undefined) return;
+    const jitter = Math.random() * backoff * 0.5;
+    const delay = Math.min(backoff, SUB_MAX_DELAY) + jitter;
+    console.warn(`[sub] reconnecting in ${Math.round(delay)}ms…`);
+    backoff = Math.min(backoff * 2, SUB_MAX_DELAY);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      if (cancelled) return;
+      // A reconnect also re-hydrates state (missed facts during the gap).
+      opts?.onQuit?.();
+      openSubscription()
+        .then((subId) => { latestSubId = subId; })
+        .catch((e) => { console.error('[sub reconnect]', e); scheduleReconnect(); });
+    }, delay);
+  };
 
   const openSubscription = (): Promise<number> =>
     getApi().subscribe({
       app: 'grove',
       path: '/updates',
       event: (data: any) => {
+        // First event since (re)subscribe confirms the channel is live.
+        backoff = SUB_BASE_DELAY;
         const norm = normalizeUpdate(data);
         if (norm) onEvent(norm);
       },
       err: (e) => {
         console.error('[sub err]', e);
         opts?.onError?.(e);
+        scheduleReconnect();
       },
       quit: () => {
         if (cancelled) return;
-        console.warn('[sub quit] reconnecting in 2s…');
-        setTimeout(() => {
-          if (cancelled) return;
-          openSubscription()
-            .then((id) => { latestSubId = id; })
-            .catch((e) => console.error('[sub reconnect]', e));
-          opts?.onQuit?.();
-        }, 2000);
+        console.warn('[sub quit]');
+        scheduleReconnect();
       },
     });
 
-  const id = openSubscription().then((subId) => { latestSubId = subId; return subId; });
+  const id = openSubscription().then(
+    (subId) => { latestSubId = subId; backoff = SUB_BASE_DELAY; return subId; },
+    (e) => {
+      // Initial open failed — retry on the same backoff path instead of
+      // leaving an unhandled rejection with no live sync.
+      console.error('[sub initial open]', e);
+      opts?.onError?.(e);
+      scheduleReconnect();
+      throw e;
+    },
+  );
+  // The returned id promise may reject on first-open failure; swallow that
+  // here so it isn't an unhandled rejection (cancel() handles the live id).
+  id.catch(() => {});
 
   return {
     id,
     cancel() {
       cancelled = true;
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
+      // Target the live sub id — a reconnect may have minted a new one.
       if (latestSubId !== undefined) {
         getApi().unsubscribe(latestSubId);
       } else {
