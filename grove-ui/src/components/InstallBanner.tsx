@@ -137,6 +137,9 @@ export default function InstallBanner() {
   }, []);
 
   if (dismissed || installed) return null;
+  // In production, only surface the banner when there's a real install prompt.
+  // The diagnostic panel (below) leaks CSP/UA and is dev-only.
+  if (!deferredPrompt && !import.meta.env.DEV) return null;
 
   return (
     <div className="flex flex-col gap-1 bg-panel border-b border-border px-3 py-2 text-sm">
@@ -157,9 +160,11 @@ export default function InstallBanner() {
           </svg>
         </button>
       </div>
-      <div className="text-xs text-faint font-mono space-y-0.5 break-all">
-        {lines.map((l, i) => <div key={i}>{l}</div>)}
-      </div>
+      {import.meta.env.DEV && (
+        <div className="text-xs text-faint font-mono space-y-0.5 break-all">
+          {lines.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
     </div>
   );
 }
