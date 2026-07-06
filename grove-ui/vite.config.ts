@@ -45,7 +45,9 @@ export default defineConfig({
         ],
       },
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // Include mjs (1MB react-pdf worker) + webmanifest so offline PDF
+        // viewing and install metadata work (M3).
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,ico,woff,woff2,webmanifest}'],
       },
     }),
   ],
@@ -62,9 +64,13 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name][extname]',
+        // Content-hashed filenames so the precache gets a real revision per
+        // asset — otherwise Workbox serves the old bundle forever after an OTA
+        // (new shell, stale JS/CSS). index.html references are rewritten by
+        // vite, so hashing is safe (H5).
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]',
       },
     },
   },

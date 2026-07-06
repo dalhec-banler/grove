@@ -20,6 +20,21 @@ export function formatDate(da: string): string {
     : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Parse an Urbit @da (`~2026.4.15..19.16.25..9c77`, NOT zero-padded) or an ISO
+// string into a comparable numeric key (ms since epoch, UTC). Lexicographic
+// compares on the raw @da are wrong (`~2026.4.15` sorts before `~2026.4.9`, and
+// December before September), so all date sorting must key off this instead.
+export function dateSortKey(da: string): number {
+  if (!da) return 0;
+  const m = da.match(/^~(\d+)\.(\d+)\.(\d+)(?:\.\.(\d+)\.(\d+)(?:\.(\d+))?)?/);
+  if (m) {
+    const [, y, mo, d, h = '0', mi = '0', s = '0'] = m;
+    return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+  }
+  const t = Date.parse(da);
+  return Number.isNaN(t) ? 0 : t;
+}
+
 export const IMAGE_MARKS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'tiff']);
 
 export function inferMark(filename: string): string {

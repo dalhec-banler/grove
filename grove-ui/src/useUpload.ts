@@ -1,7 +1,48 @@
 import { useCallback, useRef, useState } from 'react';
-import type { FileMeta } from './types';
+import type { FileMeta, GroveAction } from './types';
 import { inferMark } from './format';
 import { poke, fileToBase64, scryFiles, notifyError } from './api';
+
+// cyrb128 — fast, deterministic 128-bit string hash (no crypto/async dependency,
+// so it works identically in the browser and the jsdom test env).
+function cyrb128(str: string): [number, number, number, number] {
+  let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+  for (let i = 0, k; i < str.length; i++) {
+    k = str.charCodeAt(i);
+    h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+    h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+    h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+    h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+  h1 ^= (h2 ^ h3 ^ h4); h2 ^= h1; h3 ^= h1; h4 ^= h1;
+  return [h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0];
+}
+
+// Encode a bigint as a canonical Urbit @uv literal: `0v` + base-32 digits grouped
+// in fives from the right, separated by dots (the form `slaw %uv` accepts).
+function toUv(n: bigint): string {
+  const alphabet = '0123456789abcdefghijklmnopqrstuv';
+  if (n <= 0n) return '0v0';
+  let digits = '';
+  while (n > 0n) { digits = alphabet[Number(n % 32n)] + digits; n /= 32n; }
+  const groups: string[] = [];
+  for (let i = digits.length; i > 0; i -= 5) groups.unshift(digits.slice(Math.max(0, i - 5), i));
+  return `0v${groups.join('.')}`;
+}
+
+// Deterministic, stable @uv id for a file. Because it's derived from the file's
+// identity (not entropy) and generated once per upload, every poke-queue / SW
+// retry reuses the SAME id, so the agent no-ops on a duplicate → idempotent.
+export function uvFileId(f: File): string {
+  const seed = `${f.name}${f.size}${f.lastModified}${f.type}`;
+  const [a, b, c, d] = cyrb128(seed);
+  const n = (BigInt(a) << 96n) | (BigInt(b) << 64n) | (BigInt(c) << 32n) | BigInt(d);
+  return toUv(n);
+}
 
 export function waitForUploadEvents(
   expected: number,
@@ -35,10 +76,16 @@ export function useUpload(
   const [bulkTagIds, setBulkTagIds] = useState<string[] | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const dragCounter = useRef(0);
+  // Batches dropped while a batch is already in-flight; drained in `finally` so a
+  // second drop mid-upload no longer clobbers the first batch's shared refs (M4).
+  const pendingBatchesRef = useRef<File[][]>([]);
+  const uploadRef = useRef<(list: FileList | File[]) => Promise<void>>(async () => {});
 
   const upload = useCallback(async (list: FileList | File[]) => {
     const fileArr = Array.from(list);
     if (fileArr.length === 0) return;
+    // Busy-guard: don't wipe an in-flight batch's refs — queue instead (M4).
+    if (isUploadingRef.current) { pendingBatchesRef.current.push(fileArr); return; }
     isUploadingRef.current = true;
     uploadCollectedRef.current = [];
     setBusy(true);
@@ -47,7 +94,9 @@ export function useUpload(
       for (let i = 0; i < fileArr.length; i++) {
         const f = fileArr[i];
         const data = await fileToBase64(f);
-        await poke({ upload: { name: f.name, 'file-mark': inferMark(f.name), data, tags: [] } });
+        // Stable client-side id → retries reuse it → agent no-ops on dup (H3).
+        const action = { upload: { id: uvFileId(f), name: f.name, 'file-mark': inferMark(f.name), data, tags: [] as string[] } };
+        await poke(action as GroveAction);
         setProgress({ done: i + 1, total: fileArr.length });
       }
       const collected = await waitForUploadEvents(fileArr.length, uploadCollectedRef);
@@ -62,8 +111,11 @@ export function useUpload(
       uploadCollectedRef.current = [];
       setBusy(false);
       setProgress(null);
+      const next = pendingBatchesRef.current.shift();
+      if (next) void uploadRef.current(next);
     }
   }, [setFiles, isUploadingRef, uploadCollectedRef]);
+  uploadRef.current = upload;
 
   const onDragEnter = (e: React.DragEvent) => {
     if (!e.dataTransfer?.types?.includes('Files')) return;

@@ -80,9 +80,10 @@
   ==
 ::
 +$  action
-  $%  [%upload name=@t file-mark=@tas data=octs tags=(set tag)]
+  $%  [%upload id=(unit file-id) name=@t file-mark=@tas data=octs tags=(set tag)]
       [%delete id=file-id]
       [%rename id=file-id name=@t]
+      [%set-description id=file-id description=@t]
       [%toggle-star id=file-id]
       [%add-tags id=file-id tags=(set tag)]
       [%remove-tags id=file-id tags=(set tag)]

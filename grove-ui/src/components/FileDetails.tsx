@@ -54,7 +54,7 @@ export default function FileDetails({ file, share, catalogs, onClose, onRename, 
   }
 
   return (
-    <aside className="fixed inset-0 z-30 bg-surface overflow-y-auto md:static md:w-80 md:shrink-0 md:border-l md:border-border md:z-auto">
+    <aside className="fixed inset-0 z-30 bg-surface overflow-y-auto pb-[calc(56px+env(safe-area-inset-bottom))] md:static md:w-80 md:shrink-0 md:border-l md:border-border md:z-auto md:pb-0">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button onClick={onClose} className="text-muted hover:text-ink text-lg md:hidden">&larr;</button>

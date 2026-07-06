@@ -18,6 +18,19 @@
         ?.split('=')[0]
         ?.replace('urbauth-', '') || '';
     </script>
+    <script>
+      // Capture beforeinstallprompt as early as possible — Chrome fires it
+      // before React mounts, so InstallBanner (which reads window.__pwaPrompt)
+      // would otherwise never see it and the Install button never appears (H7).
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__pwaPrompt = null;
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

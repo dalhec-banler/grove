@@ -52,6 +52,21 @@ describe('sortByKey', () => {
     expect(r.map((x) => x.n)).toEqual(['beta', 'gamma', 'alpha']);
   });
 
+  // Locks H8: raw Urbit @da is NOT zero-padded, so a lexicographic compare puts
+  // "Apr 15" before "Apr 9" and December before September. Uses a 2-digit day and
+  // a 2-digit month vs 1-digit to catch exactly that (single-digit-only tests missed it).
+  it('sorts @da dates numerically, not lexicographically', () => {
+    const list = [
+      { n: 'apr9',  d: '~2026.4.9..00.00.00',  s: 1, t: 'x' },
+      { n: 'apr15', d: '~2026.4.15..00.00.00', s: 1, t: 'x' },
+      { n: 'dec1',  d: '~2026.12.1..00.00.00', s: 1, t: 'x' },
+      { n: 'sep1',  d: '~2026.9.1..00.00.00',  s: 1, t: 'x' },
+    ];
+    // Chronological: Apr 9 < Apr 15 < Sep 1 < Dec 1.
+    expect(sortByKey(list, 'newest', ACC).map((x) => x.n)).toEqual(['dec1', 'sep1', 'apr15', 'apr9']);
+    expect(sortByKey(list, 'oldest', ACC).map((x) => x.n)).toEqual(['apr9', 'apr15', 'sep1', 'dec1']);
+  });
+
   it('does not mutate input', () => {
     const orig = items();
     sortByKey(orig, 'newest', ACC);

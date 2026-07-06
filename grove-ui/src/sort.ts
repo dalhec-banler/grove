@@ -1,4 +1,5 @@
 import type { SortKey } from './types';
+import { dateSortKey } from './format';
 
 interface SortAccessors<T> {
   name: (item: T) => string;
@@ -10,8 +11,8 @@ interface SortAccessors<T> {
 export function sortByKey<T>(list: T[], key: SortKey, acc: SortAccessors<T>): T[] {
   const sorted = list.slice();
   switch (key) {
-    case 'newest':    sorted.sort((a, b) => acc.date(b).localeCompare(acc.date(a))); break;
-    case 'oldest':    sorted.sort((a, b) => acc.date(a).localeCompare(acc.date(b))); break;
+    case 'newest':    sorted.sort((a, b) => dateSortKey(acc.date(b)) - dateSortKey(acc.date(a))); break;
+    case 'oldest':    sorted.sort((a, b) => dateSortKey(acc.date(a)) - dateSortKey(acc.date(b))); break;
     case 'name-asc':  sorted.sort((a, b) => acc.name(a).localeCompare(acc.name(b))); break;
     case 'name-desc': sorted.sort((a, b) => acc.name(b).localeCompare(acc.name(a))); break;
     case 'largest':   sorted.sort((a, b) => acc.size(b) - acc.size(a)); break;
