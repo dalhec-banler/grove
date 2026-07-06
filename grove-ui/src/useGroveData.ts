@@ -40,37 +40,59 @@ export function useGroveData(
   const [shareDialog, setShareDialog] = useState<Share | null>(null);
   const filesRef = useRef(files);
   filesRef.current = files;
+  // True once a live scry snapshot has applied — guards the (slower) IDB cache
+  // restore so stale cache can never overwrite fresh data (H2).
+  const loadedFreshRef = useRef(false);
 
   const refreshAll = useCallback(async () => {
-    const [fileList, viewList, shareList, inboxList, trustData, catalogList, peerList, subList, groupList] = await Promise.all([
-      scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
-      scryCatalogs(), scryCatalogPeers(), scryCatalogSubs(), scryGroups(),
-    ]);
-    setFiles(new Map(fileList.map((m) => [m.id, m])));
-    setViews(new Map(viewList.map((w) => [w.name, w])));
-    setShares(new Map(shareList.map((sh) => [sh.token, sh])));
-    setInbox(new Map(inboxList.map((e) => [`${e.owner}/${e.fileId}`, e])));
-    setTrusted(new Set(trustData.trusted));
-    setBlocked(new Set(trustData.blocked));
-    setCatalogs(new Map(catalogList.map((c) => [c.catalogId, c.config])));
-    setCatalogPeers(new Map(peerList.map((l) => [`${l.host}/${l.catalogId}`, l])));
-    setCatalogSubs(subList);
-    setAvailableGroups(groupList);
+    // allSettled, not all: one failing scry (e.g. a partially-deployed
+    // feature) must not fail-fast and blank the whole app — apply the ones
+    // that succeeded and keep going (H3).
+    const [fileR, viewR, shareR, inboxR, trustR, catalogR, peerR, subR, groupR] =
+      await Promise.allSettled([
+        scryFiles(), scryViews(), scryShares(), scryInbox(), scryTrusted(),
+        scryCatalogs(), scryCatalogPeers(), scryCatalogSubs(), scryGroups(),
+      ]);
+
+    // Total failure (e.g. offline / auth lost) — surface it to the caller so
+    // the initial-load path can show an error and retry.
+    if ([fileR, viewR, shareR, inboxR, trustR, catalogR, peerR, subR, groupR]
+      .every((r) => r.status === 'rejected')) {
+      throw (fileR as PromiseRejectedResult).reason;
+    }
+
+    if (fileR.status === 'fulfilled') setFiles(new Map(fileR.value.map((m) => [m.id, m])));
+    if (viewR.status === 'fulfilled') setViews(new Map(viewR.value.map((w) => [w.name, w])));
+    if (shareR.status === 'fulfilled') setShares(new Map(shareR.value.map((sh) => [sh.token, sh])));
+    if (inboxR.status === 'fulfilled') setInbox(new Map(inboxR.value.map((e) => [`${e.owner}/${e.fileId}`, e])));
+    if (trustR.status === 'fulfilled') { setTrusted(new Set(trustR.value.trusted)); setBlocked(new Set(trustR.value.blocked)); }
+    if (catalogR.status === 'fulfilled') setCatalogs(new Map(catalogR.value.map((c) => [c.catalogId, c.config])));
+    if (peerR.status === 'fulfilled') setCatalogPeers(new Map(peerR.value.map((l) => [`${l.host}/${l.catalogId}`, l])));
+    if (subR.status === 'fulfilled') setCatalogSubs(subR.value);
+    if (groupR.status === 'fulfilled') setAvailableGroups(groupR.value);
+
+    loadedFreshRef.current = true;
     setConnected(true);
     setLoadError(null);
-    putCache('grove-state', {
-      v: CACHE_SCHEMA_VERSION,
-      files: fileList,
-      views: viewList,
-      shares: shareList,
-      inbox: inboxList,
-      trusted: trustData.trusted,
-      blocked: trustData.blocked,
-      catalogs: catalogList.map((c) => [c.catalogId, c.config]),
-      catalogPeers: peerList.map((l) => [`${l.host}/${l.catalogId}`, l]),
-      catalogSubs: subList,
-      groups: groupList,
-    }).catch(() => {});
+
+    // Only persist a fully-coherent snapshot — never cache a partial result.
+    if (fileR.status === 'fulfilled' && viewR.status === 'fulfilled' && shareR.status === 'fulfilled'
+      && inboxR.status === 'fulfilled' && trustR.status === 'fulfilled' && catalogR.status === 'fulfilled'
+      && peerR.status === 'fulfilled' && subR.status === 'fulfilled' && groupR.status === 'fulfilled') {
+      putCache('grove-state', {
+        v: CACHE_SCHEMA_VERSION,
+        files: fileR.value,
+        views: viewR.value,
+        shares: shareR.value,
+        inbox: inboxR.value,
+        trusted: trustR.value.trusted,
+        blocked: trustR.value.blocked,
+        catalogs: catalogR.value.map((c) => [c.catalogId, c.config]),
+        catalogPeers: peerR.value.map((l) => [`${l.host}/${l.catalogId}`, l]),
+        catalogSubs: subR.value,
+        groups: groupR.value,
+      }).catch(() => {});
+    }
   }, []);
 
   const handleUpdate = useCallback((u: Update) => {
@@ -207,7 +229,29 @@ export function useGroveData(
   }, [isUploadingRef, uploadCollectedRef]);
 
   useEffect(() => {
+    let disposed = false;
+    // Subscribe BEFORE the initial scry so no fact is dropped in the gap
+    // between snapshot and subscription. Facts that arrive before the
+    // snapshot resolves are buffered, then replayed on top of it — so the
+    // wholesale snapshot apply can't clobber a live mutation (H1).
+    let snapshotReady = false;
+    const buffer: Update[] = [];
+
+    const handle = subscribeUpdates(
+      (u) => {
+        if (snapshotReady) handleUpdate(u);
+        else buffer.push(u);
+      },
+      {
+        onQuit: () => refreshAll().catch((e) => { console.error('reconnect refresh failed', e); setLoadError('Connection lost'); }),
+        onError: () => setConnected(false),
+      },
+    );
+
+    // Instant paint from IDB — but only if fresh data hasn't already landed,
+    // so stale cache can never overwrite a completed scry/live fact (H2).
     getCache<any>('grove-state').then((cached) => {
+      if (disposed || loadedFreshRef.current) return;
       if (cached && cached.v === CACHE_SCHEMA_VERSION && cached.files) {
         setFiles(new Map(cached.files.map((m: FileMeta) => [m.id, m])));
         setViews(new Map(cached.views.map((w: View) => [w.name, w])));
@@ -221,15 +265,18 @@ export function useGroveData(
         setAvailableGroups(cached.groups ?? []);
       }
     }).catch(() => {});
-    refreshAll().catch((e) => { console.error('initial load failed', e); setLoadError('Failed to connect to Grove'); });
-  }, [refreshAll]);
 
-  useEffect(() => {
-    const handle = subscribeUpdates(handleUpdate, {
-      onQuit: () => refreshAll().catch((e) => { console.error('reconnect refresh failed', e); setLoadError('Connection lost'); }),
-      onError: () => setConnected(false),
-    });
-    return () => handle.cancel();
+    refreshAll()
+      .then(() => {
+        if (disposed) return;
+        snapshotReady = true;
+        // Replay any facts that raced ahead of the snapshot.
+        for (const u of buffer) handleUpdate(u);
+        buffer.length = 0;
+      })
+      .catch((e) => { console.error('initial load failed', e); setLoadError('Failed to connect to Grove'); });
+
+    return () => { disposed = true; handle.cancel(); };
   }, [refreshAll, handleUpdate]);
 
   return {
